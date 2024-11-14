@@ -5,7 +5,7 @@
 # https://github.com/dgarage/NBXplorer/tags
 NBXplorerVersion="v2.5.9"
 # https://github.com/btcpayserver/btcpayserver/releases
-BTCPayVersion="v2.0.0"
+BTCPayVersion="v2.0.3"
 
 # check who signed the release (person that published release)
 #PGPsigner="nicolasdorier"

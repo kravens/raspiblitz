@@ -1,3 +1,7 @@
+## What's new in Version 1.12.0 of RaspiBlitz?
+
+- Update: BTCPayServer 2.0.3 [details](https://github.com/btcpayserver/btcpayserver/releases/tag/v2.0.3)
+
 ## What's new in Version 1.11.3 of RaspiBlitz?
 
 Optimized now to run also on plain debian12 linux for Proxmox/VM & x86 systems.
