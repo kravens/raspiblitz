@@ -8,17 +8,17 @@ NBXplorerVersion="v2.5.9"
 BTCPayVersion="v2.0.3"
 
 # check who signed the release (person that published release)
-#PGPsigner="nicolasdorier"
-#PGPpubkeyLink="https://keybase.io/nicolasdorier/pgp_keys.asc"
-#PGPpubkeyFingerprint="AB4CFA9895ACA0DBE27F6B346618763EF09186FE"
+PGPsigner="nicolasdorier"
+PGPpubkeyLink="https://keybase.io/nicolasdorier/pgp_keys.asc"
+PGPpubkeyFingerprint="AB4CFA9895ACA0DBE27F6B346618763EF09186FE"
 # ---
 #PGPsigner="Kukks"
 #PGPpubkeyLink="https://github.com/${PGPsigner}.gpg"
 #PGPpubkeyFingerprint="8E5530D9D1C93097"
 # ---
-PGPsigner="web-flow"
-PGPpubkeyLink="https://github.com/web-flow.gpg"
-PGPpubkeyFingerprint="B5690EEEBB952194"
+# PGPsigner="web-flow"
+# PGPpubkeyLink="https://github.com/web-flow.gpg"
+# PGPpubkeyFingerprint="B5690EEEBB952194"
 
 # command info
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
@@ -520,10 +520,12 @@ if [ "$1" = "install" ]; then
   sudo -u btcpay git clone https://github.com/btcpayserver/btcpayserver.git 2>/dev/null
   cd btcpayserver || exit 1
   sudo -u btcpay git reset --hard $BTCPayVersion
-  #sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "web-flow" "https://github.com/web-flow.gpg" "(4AEE18F83AFDEB23|B5690EEEBB952194)" || exit 1
 
   echo "# verify signature of ${PGPsigner}"
-  sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}" || exit 1
+  if ! sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}"; then
+    # try with webflow
+    sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "web-flow" "https://github.com/web-flow.gpg" "B5690EEEBB952194" || exit 1
+  fi
 
   echo "# Build BTCPayServer $BTCPayVersion"
   # from the build.sh with path
@@ -938,10 +940,6 @@ if [ "$1" = "update" ]; then
     TAG=$(git tag | grep v1 | sort -V | tail -1)
     echo "# Reset to the latest release tag: $TAG"
     sudo -u btcpay git reset --hard $TAG
-    # PGP verify - disabled for the update
-    # https://github.com/rootzoll/raspiblitz/issues/3025
-    # sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh \
-    #  "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}" || exit 1
     echo "# Build BTCPayServer $TAG"
     # from the build.sh with path
     sudo systemctl stop btcpayserver
