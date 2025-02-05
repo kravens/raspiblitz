@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Wasabi Backend/Coordinator deployment bonus script for RaspiBlitz v1.11.4 (26/01/2025)
 $WasabiVersion="v2.4.0"
 
