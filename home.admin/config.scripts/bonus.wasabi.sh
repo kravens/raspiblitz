@@ -10,7 +10,8 @@ PGPpubkeyFingerprint="6FB3872B5D42292F59920797856348328949861E"
 # command info
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
   echo "Config script to switch Wasabi Coordinator/Backend on or off"
-  echo "bonus.wasabi.sh menu"
+  echo "bonus.wasabi.sh [on|off]"
+  echo "enables/disables the coordinator and backend"
   echo "bonus.wasabi.sh [install|uninstall]"
   echo "installs Wasabi Wallet $WasabiVersion"
   echo "To update to the latest release published on github run:"
@@ -24,9 +25,9 @@ source /mnt/hdd/raspiblitz.conf
 source /home/admin/raspiblitz.info
 source <(/home/admin/_cache.sh get state)
 
-function WasabiService() {
+function CoordinatorService() {
   
-  echo "# create the wasabi.service"
+  echo "# create the wasabicoordinator.service"
   echo "
 [Unit]
 Description=Wasabi Coordinator daemon
@@ -39,7 +40,7 @@ ExecStart=/home/wasabi/dotnet/dotnet run \
 User=wasabi
 Group=wasabi
 Type=simple
-PIDFile=/run/wasabi/wasabi.pid
+PIDFile=/run/wasabi/wasabicoordinator.pid
 Restart=always
 RestartSec=10
 
@@ -51,7 +52,7 @@ PrivateDevices=true
 
 [Install]
 WantedBy=multi-user.target
-" | sudo tee /etc/systemd/system/wasabi.service
+" | sudo tee /etc/systemd/system/wasabicoordinator.service
   sudo systemctl daemon-reload
 }
 
@@ -70,7 +71,7 @@ ExecStart=/home/wasabi/dotnet/dotnet run \
 User=wasabi
 Group=wasabi
 Type=simple
-PIDFile=/run/wasabi/wasabi.pid
+PIDFile=/run/wasabi/wasabibackend.pid
 Restart=always
 RestartSec=10
 
@@ -82,7 +83,7 @@ PrivateDevices=true
 
 [Install]
 WantedBy=multi-user.target
-" | sudo tee /etc/systemd/system/wasabi.service
+" | sudo tee /etc/systemd/system/wasabibackend.service
   sudo systemctl daemon-reload
 }
 
@@ -120,11 +121,11 @@ if [ "$1" = "install" ]; then
     export DOTNET_CLI_TELEMETRY_OPTOUT=1
 
     # Build Wasabi Backend
-    cd WalletWasabi/WalletWasabi.Backend/
+    cd $HOME/WalletWasabi/WalletWasabi.Backend/
     sudo $HOME/dotnet/dotnet build
 
     # Build Wasabi Coordinator
-    cd ../WalletWasabi.Coordinator
+    cd $HOME/WalletWasabi/WalletWasabi.Coordinator
     sudo $HOME/dotnet/dotnet build
 
     echo "# make sure wasabi is member of the bitcoin group"
@@ -136,7 +137,7 @@ if [ "$1" = "install" ]; then
 
 if [ "$1" = "uninstall" ]; then
 
-  isActive=$(sudo ls /etc/systemd/system/wasabi.service 2>/dev/null | grep -c 'wasabi.service')
+  isActive=$(sudo ls /etc/systemd/system/wasabicoordinator.service 2>/dev/null | grep -c 'wasabicoordinator.service')
   if [ "${isActive}" != "0" ]; then
     echo "# cannot uninstall if still 'on'"
     exit 1
@@ -166,20 +167,23 @@ sudo -r wasabi git pull -p
 ########################################
 
 if [ "$1" = "1" ] || [ "$1" = "on" ]; then
-  WasabiService
+  CoordinatorService
+  sudo systemctl enable wasabicoordinator
+  sudo systemctl start wasabicoordinator
+  
   BackendService
-  sudo systemctl enable wasabi
-  sudo systemctl start wasabi
+  sudo systemctl enable wasabibackend
+  sudo systemctl start wasabibackend
 fi
 ########################################
 # OFF (deactivate)
 ########################################
 
 if [ "$1" = "0" ] || [ "$1" = "off" ]; then
-  # removing service: wasabi
-  sudo systemctl stop wasabi
-  sudo systemctl disable wasabi
-  sudo rm /etc/systemd/system/wasabi.service
+  # removing service: wasabicoordinator
+  sudo systemctl stop wasabicoordinator
+  sudo systemctl disable wasabicoordinator
+  sudo rm /etc/systemd/system/wasabicoordinator.service
   # removing service: wasabibackend
   sudo systemctl stop wasabibackend
   sudo systemctl disable wasabibackend
