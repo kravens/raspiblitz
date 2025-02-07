@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Wasabi Backend/Coordinator deployment bonus script for RaspiBlitz v1.11.4 (26/01/2025)
-$WasabiVersion="v2.4.0"
+WasabiVersion="v2.5.1"
 
 PGPsigner="web-flow"
 PGPpubkeyLink="https://github.com/web-flow.gpg"
@@ -26,13 +26,12 @@ source /home/admin/raspiblitz.info
 source <(/home/admin/_cache.sh get state)
 
 function CoordinatorService() {
-  
   echo "# create the wasabicoordinator.service"
   echo "
 [Unit]
 Description=Wasabi Coordinator daemon
-Requires=bitcoin.service
-After=bitcoin.service
+Requires=bitcoind.service
+After=bitcoind.service
 
 [Service]
 ExecStart=/home/wasabi/dotnet/dotnet run \
@@ -57,13 +56,12 @@ WantedBy=multi-user.target
 }
 
 function BackendService() {
-  
   echo "# create the wasabibackend.service"
   echo "
 [Unit]
 Description=Wasabi Backend daemon
-Requires=bitcoin.service
-After=bitcoin.service
+Requires=bitcoind.service
+After=bitcoind.service
 
 [Service]
 ExecStart=/home/wasabi/dotnet/dotnet run \
@@ -105,31 +103,40 @@ if [ "$1" = "install" ]; then
     cd /home/wasabi || exit 1
 
     # Clone repository
-    sudo git clone https://github.com/WalletWasabi/WalletWasabi.git
+    sudo -u wasabi git clone https://github.com/WalletWasabi/WalletWasabi.git
 
     # Install latest dotnet SDK 8.0
-    sudo wget https://download.visualstudio.microsoft.com/download/pr/bb17a3ab-7122-41bd-96cf-33e35b1d4318/7b09327fdd49b7130cf94838f2979aa6/dotnet-sdk-8.0.405-linux-arm64.tar.gz
+    sudo -u wasabi wget https://download.visualstudio.microsoft.com/download/pr/bb17a3ab-7122-41bd-96cf-33e35b1d4318/7b09327fdd49b7130cf94838f2979aa6/dotnet-sdk-8.0.405-linux-arm64.tar.gz
+    # verify download hash (todo)
 
-    mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-8.0.405-linux-arm64.tar.gz -C $HOME/dotnet
+    sudo mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-8.0.405-linux-arm64.tar.gz -C $HOME/dotnet
     export DOTNET_ROOT=$HOME/dotnet
     export PATH=$PATH:$HOME/dotnet
 
     # Remove downloaded tar/zip file
-    rm dotnet-sdk-8.0.405-linux-arm64.tar.gz
+    sudo rm dotnet-sdk-8.0.405-linux-arm64.tar.gz
 
     # Disable telemetry
     export DOTNET_CLI_TELEMETRY_OPTOUT=1
 
     # Build Wasabi Backend
-    cd $HOME/WalletWasabi/WalletWasabi.Backend/
-    sudo $HOME/dotnet/dotnet build
+    echo "build Wasabi Backend"
+    cd /home/wasabi/WalletWasabi/WalletWasabi.Backend/
+    sudo -u wasabi $HOME/dotnet/dotnet build -c Release \
+      /home/wasabi/WalletWasabi/WalletWasabi.Backend/WalletWasabi.Backend.csproj || exit 1
+
 
     # Build Wasabi Coordinator
-    cd $HOME/WalletWasabi/WalletWasabi.Coordinator
-    sudo $HOME/dotnet/dotnet build
+    echo "build Wasabi Coordinator"
+    cd /home/wasabi/WalletWasabi/WalletWasabi.Coordinator
+    sudo -u wasabi $HOME/dotnet/dotnet build -c Release \
+      /home/wasabi/WalletWasabi/WalletWasabi.Coordinator/WalletWasabi.Coordinator.csproj || exit 1
 
     echo "# make sure wasabi is member of the bitcoin group"
     sudo /usr/sbin/usermod --append --groups bitcoin wasabi
+    exit 0
+    echo "Finished installing Wasabi Backend & Coordinator! Happy Co 🕶️"
+fi
 
 ########################################
 # UNINSTALL (remove from system)
@@ -170,7 +177,7 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
   CoordinatorService
   sudo systemctl enable wasabicoordinator
   sudo systemctl start wasabicoordinator
-  
+
   BackendService
   sudo systemctl enable wasabibackend
   sudo systemctl start wasabibackend
