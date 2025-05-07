@@ -107,7 +107,14 @@ if [ "$1" = "install" ]; then
 
     # Install latest dotnet SDK 8.0
     sudo -u wasabi wget https://download.visualstudio.microsoft.com/download/pr/bb17a3ab-7122-41bd-96cf-33e35b1d4318/7b09327fdd49b7130cf94838f2979aa6/dotnet-sdk-8.0.405-linux-arm64.tar.gz
-    # verify download hash (todo)
+    
+    # Verify download hash
+    expectedHash="07988b784bf71913f607ce0ced50434c69980ae715ca62fb6af68f7eaa26810c3f9ffe24df1d8706d1a557c3eb7756143e5357016089cf1508714baa1cce828a"
+    actualHash=$(sha512sum dotnet-sdk-8.0.405-linux-arm64.tar.gz | cut -d' ' -f1)
+    if [ "$actualHash" != "$expectedHash" ]; then
+      echo "Error: Downloaded file hash does not match expected hash."
+      exit 1
+    fi
 
     sudo mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-8.0.405-linux-arm64.tar.gz -C $HOME/dotnet
     export DOTNET_ROOT=$HOME/dotnet
