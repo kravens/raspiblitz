@@ -35,7 +35,7 @@ After=bitcoind.service
 
 [Service]
 ExecStart=/home/wasabi/dotnet/dotnet run \
- -c Release --project \"/home/wasabi/WalletWasabi.Coordinator/WalletWasabi.Coordinator.csproj\"
+ -c Release --project \"/home/wasabi/WalletWasabi/WalletWasabi.Coordinator/WalletWasabi.Coordinator.csproj\"
 User=wasabi
 Group=wasabi
 Type=simple
@@ -65,7 +65,7 @@ After=bitcoind.service
 
 [Service]
 ExecStart=/home/wasabi/dotnet/dotnet run \
- -c Release --project \"/home/wasabi/WalletWasabi.Backend/WalletWasabi.Backend.csproj\"
+ -c Release --project \"/home/wasabi/WalletWasabi/WalletWasabi.Backend/WalletWasabi.Backend.csproj\"
 User=wasabi
 Group=wasabi
 Type=simple
