@@ -1,17 +1,19 @@
 #!/bin/bash
 
+# backup usb thumbdrive needs to be smaller than 32GB so its ignored for system drive layout
+# and can be easily formatted with FAT32 and used on Windows/Mac/Linux
+
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
- echo "# adding and removing a backup device (usb thumbdrive)"
+ echo "# adding and removing a backup device (usb thumbdrive - smaller than 32GB)"
  echo "# blitz.backupdevice.sh status"
  echo "# blitz.backupdevice.sh on [?DEVICEUUID|DEVICENAME]"
  echo "# blitz.backupdevice.sh off"
  echo "# blitz.backupdevice.sh mount"
- echo "error='missing parameters'"
  exit 1
 fi
 
 echo "### blitz.backupdevice.sh ###"
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf
 
 #########################
 # STATUS
@@ -42,9 +44,6 @@ if [ "$1" = "status" ]; then
   else
     echo "backupdevice=0"
 
-    # get info on possible already existing BTRFS RAID1 usb drive
-    source <(sudo /home/admin/config.scripts/blitz.datadrive.sh status)
-
     # get all the devices that are not mounted and possible candidates
     drivecounter=0
     for disk in $(lsblk -o NAME,TYPE | grep "disk" | awk '$1=$1' | cut -d " " -f 1)
@@ -57,8 +56,15 @@ if [ "$1" = "status" ]; then
         sizeGigaBytes=$(echo "scale=0; ${sizeBytes}/1024/1024/1024" | bc -l)
         vendorname=$(lsblk -o NAME,VENDOR | grep "^${disk}" | awk '$1=$1' | cut -d " " -f 2)
         mountoption="${disk} ${sizeGigaBytes} GB ${vendorname}"
-        echo "backupCandidate[${drivecounter}]='${mountoption}'"
-        drivecounter=$(($drivecounter +1))
+        # backup devices needs to be less then 30GB
+        if [ ${sizeGigaBytes} -gt 0 ] && [ ${sizeGigaBytes} -lt 31 ]; then
+          # add to array of candidates
+          backupCandidate[${drivecounter}]="${mountoption}"
+          echo "backupCandidate[${drivecounter}]='${mountoption}'"
+          drivecounter=$(($drivecounter +1))
+        else
+          echo "# ${disk} is not a candidate for backup device - size is ${sizeGigaBytes} GB"
+        fi
       fi
     done
     echo "backupCandidates=${drivecounter}"
@@ -96,7 +102,7 @@ if [ "$1" = "on" ]; then
 
     # check if backup device is already connected
     if [ ${backupCandidates} -eq 0 ]; then
-      dialog --title ' Adding Backup Device ' --msgbox 'Please connect now the backup device\nFor example a thumb drive bigger than 120 MB.\nDont use a second HDD/SSD for that.\nBest on a USB2 port (not the blue ones).\nThen press OK.' 9 50
+      dialog --title ' Adding Backup Device ' --msgbox 'Please connect now the backup device\nFor example a thumb drive bigger than 1GB but smaller then 32GB.' 9 50
       clear
       echo
       echo "detecting device ... (please wait)"
@@ -111,7 +117,7 @@ if [ "$1" = "on" ]; then
 
     # check if there is only one candidate
     if [ ${backupCandidates} -gt 1 ]; then
-      dialog --title ' FAIL ' --msgbox 'There is more than one possible backup target connected.\nMake sure that just that one device is connected and try again.' 8 40
+      dialog --title ' FAIL ' --msgbox 'There is more than one possible backup target connected.\nMake sure that just that one device is connected maller than 32GB and try again.' 8 40
       clear
       exit 1
     fi
@@ -146,9 +152,9 @@ THIS WILL DELETE ALL DATA ON THAT DEVICE!
       fi
       echo "# OK found device name ${hdd} that will now be formatted ..."
       echo "# Wiping all partitions (sfdisk/wipefs)"
-      sudo sfdisk --delete /dev/${hdd} 1>&2
+      sfdisk --delete /dev/${hdd} 1>&2
       sleep 4
-      sudo wipefs -a /dev/${hdd} 1>&2
+      wipefs -a /dev/${hdd} 1>&2
       sleep 4
       partitions=$(lsblk | grep -c "─${hdd}")
       if [ ${partitions} -gt 0 ]; then
@@ -157,11 +163,19 @@ THIS WILL DELETE ALL DATA ON THAT DEVICE!
         exit 1
       fi
       # using FAT32 here so that the backup can be easily opened on Windows and Mac
-      echo "# Create on big partition"
-      sudo parted /dev/${hdd} mklabel msdos 1>&2
-      sudo parted /dev/${hdd} mkpart primary fat32 0% 100% 1>&2
+      echo "# Create on big partition /dev/${hdd}"
+      parted /dev/${hdd} mklabel msdos 1>&2
+      parted /dev/${hdd} mkpart primary fat32 0% 100% 1>&2
       echo "# Formatting FAT32"
-      sudo mkfs.vfat -F 32 -n 'BLITZBACKUP' /dev/${hdd}1 1>&2
+      mkfs.vfat -F 32 -n 'BLITZBACKUP' /dev/${hdd}1 1>&2
+      sleep 2
+      # Force kernel to re-read partition table and update device info
+      partprobe /dev/${hdd} 1>&2
+      sleep 1
+      # Trigger udev to update device information
+      udevadm settle
+      udevadm trigger --subsystem-match=block
+      sleep 2
       echo "# Getting new UUID"
       uuid=$(lsblk -o UUID,NAME | grep "${hdd}1" | cut -d " " -f 1)
       if [ "${uuid}" == "" ]; then
@@ -189,12 +203,11 @@ THIS WILL DELETE ALL DATA ON THAT DEVICE!
 
   if [ "${lightning}" == "lnd" ] || [ "${lnd}" == "on" ]; then
     # copy SCB over
-    cp /mnt/hdd/lnd/data/chain/${network}/${chain}net/channel.backup /mnt/backup/channel.backup 1>&2
+    cp /mnt/hdd/app-data/lnd/data/chain/bitcoin/mainnet/channel.backup /mnt/backup/channel.backup 1>&2
   fi
   if [ "${lightning}" == "cl" ] || [ "${cl}" == "on" ]; then
     # copy ER over
-    source <(/home/admin/config.scripts/network.aliases.sh getvars cl ${chain}net)
-    cp /home/bitcoin/.lightning/${CLNETWORK}/emergency.recover /mnt/backup/${netprefix}emergency.recover 1>&2
+    cp /home/bitcoin/.lightning/bitcoin/emergency.recover /mnt/backup/emergency.recover 1>&2
   fi
 
   if [ ${userinteraction} -eq 1 ]; then

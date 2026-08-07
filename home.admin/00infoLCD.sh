@@ -58,7 +58,7 @@ if ! [[ "$pause" =~ ^[[:digit:]]+$ ]]; then
 fi
 
 # CONFIGFILE - configuration of RaspiBlitz
-configFile="/mnt/hdd/raspiblitz.conf"
+configFile="/mnt/hdd/app-data/raspiblitz.conf"
 
 # INFOFILE - state data from bootstrap
 infoFile="/home/admin/raspiblitz.info"
@@ -93,7 +93,7 @@ while :
       source <(/home/admin/config.scripts/network.aliases.sh getvars)
     fi
 
-    if [ "${setupPhase}" != "done" ] || [ "${state}" == "reboot" ] || [ "${state}" == "shutdown" ] || [ "${state}" == "copytarget" ] || [ "${state}" == "copysource" ]; then
+    if [ "${setupPhase}" != "done" ] || [ "${state}" == "reboot" ] || [ "${state}" == "shutdown" ] || [ "${state}" == "copytarget" ] || [ "${state}" == "copysource" ] || [ "${state}" = "storageisfull" ] || [ "${state}" = "dataisfull" ]; then
 
       # show status info during boot & setup & repair on LCD
       if [ "${state}" == "" ]; then

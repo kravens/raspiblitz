@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-configFile="/mnt/hdd/raspiblitz.conf"
+configFile="/mnt/hdd/app-data/raspiblitz.conf"
 
 # command info
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "-help" ]; then
@@ -23,6 +23,7 @@ if [ "$1" = "set" ]; then
 
   # check that key & value are given
   if [ "${keystr}" == "" ] || [ "${valuestr}" == "" ]; then
+    # shellcheck disable=SC2145
     echo "# blitz.conf.sh $@"
     echo "# FAIL: missing parameter"
     exit 1
@@ -39,6 +40,7 @@ if [ "$1" = "set" ]; then
   # check that config file exists
   raspiblitzConfExists=$(ls ${configFile} 2>/dev/null | grep -c "${configFile}")
   if [ ${raspiblitzConfExists} -eq 0 ]; then
+    # shellcheck disable=SC2145
     echo "# blitz.conf.sh $@"
     exit 3
   fi
@@ -87,6 +89,7 @@ elif [ "$1" = "list-add" ]; then
 
   # check that key & value are given
   if [ "${keystr}" == "" ] || [ "${valuestr}" == "" ]; then
+    # shellcheck disable=SC2145
     echo "# blitz.conf.sh $@"
     echo "# FAIL: missing parameter"
     exit 1
@@ -141,6 +144,7 @@ elif [ "$1" = "list-remove" ]; then
 
   # check that key & value are given
   if [ "${keystr}" == "" ] || [ "${valuestr}" == "" ]; then
+    # shellcheck disable=SC2145
     echo "# blitz.conf.sh $@"
     echo "# FAIL: missing parameter"
     exit 1

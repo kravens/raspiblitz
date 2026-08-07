@@ -2,24 +2,33 @@
 
 #########################################################################
 # Build your SD card image based on: 2024-03-15-raspios-bookworm-arm64.img.xz
-# https://downloads.raspberrypi.org/raspios_arm64/images/raspios_arm64-2024-03-15/
-# SHA256: 7e53a46aab92051d523d7283c080532bebb52ce86758629bf1951be9b4b0560f
+# https://downloads.raspberrypi.org/raspios_arm64/images/raspios_arm64-2025-05-13/
+# SHA256: 1162c2a47c2ebda34c7ebeafc4afb71910a05b368d0721ae3736928e60ba5047
 # also change in: raspiblitz/ci/arm64-rpi/build.arm64-rpi.pkr.hcl
 # PGP fingerprint: 8738CD6B956F460C - to check signature:
 # curl -O https://www.raspberrypi.org/raspberrypi_downloads.gpg.key && gpg --import ./raspberrypi_downloads.gpg.key && gpg --verify *.sig
 # setup fresh SD card with image above - login via SSH and run this script:
 ##########################################################################
 
+# debian sources
+REQUIRED_SOURCES=(
+  "deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware"
+  "deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware"
+  "deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware"
+)
+
 # set locale to en_US.UTF-8 on system & activate for this script
-echo "# updating locale ..."
-sed -i "s/^# en_US.UTF-8 UTF-8.*/en_US.UTF-8 UTF-8/g" /etc/locale.gen
-sed -i "s/^# en_US ISO-8859-1.*/en_US ISO-8859-1/g" /etc/locale.gen
-locale-gen en_US.UTF-8 en_US ISO-8859-1 1>/dev/null
-update-locale LANG=en_US.UTF-8 1>/dev/null
-source /etc/default/locale
+if [ "$1" != "-EXPORT" ] && [ "$1" != "EXPORT" ]; then
+  echo "# updating locale ..."
+  sed -i "s/^# en_US.UTF-8 UTF-8.*/en_US.UTF-8 UTF-8/g" /etc/locale.gen
+  sed -i "s/^# en_US ISO-8859-1.*/en_US ISO-8859-1/g" /etc/locale.gen
+  locale-gen en_US.UTF-8 en_US ISO-8859-1 1>/dev/null
+  update-locale LANG=en_US.UTF-8 1>/dev/null
+  source /etc/default/locale
+fi
 
 defaultRepo="raspiblitz" # user that hosts a `raspiblitz` repo
-defaultBranch="v1.11" # latest version branch
+defaultBranch="v1.12" # latest version branch
 
 defaultAPIuser="fusion44"
 defaultAPIrepo="blitz_api"
@@ -31,6 +40,9 @@ me="${0##/*}"
 
 nocolor="\033[0m"
 red="\033[31m"
+
+# Konfiguration für nicht-interaktive Installation
+export DEBIAN_FRONTEND=noninteractive
 
 ## usage as a function to be called whenever there is a huge mistake on the options
 usage(){
@@ -243,7 +255,7 @@ range_argument tweak_boot_drive "0" "1" "false" "true"
 : "${wifi_region:=US}"
 
 echo "*****************************************"
-echo "*     RASPIBLITZ SD CARD IMAGE SETUP    *"
+echo "*     RASPIBLITZ BOOT IMAGE SETUP       *"
 echo "*****************************************"
 echo "For details on optional parameters - call with '--help' or check source code."
 
@@ -276,12 +288,8 @@ if [ $(cat /etc/os-release 2>/dev/null | grep -c 'Debian') -gt 0 ]; then
     # experimental: fallback for all to debian
     baseimage="debian"
   fi
-elif [ $(cat /etc/os-release 2>/dev/null | grep -c 'Ubuntu') -gt 0 ]; then
-  baseimage="ubuntu"
-elif [ $(cat /etc/os-release 2>/dev/null | grep -c 'Armbian') -gt 0 ]; then
-  baseimage="armbian"
 else
-  echo "\n# FAIL: Base Image cannot be detected or is not supported."
+  echo "\n# FAIL: Base image cannot be detected or is not supported."
   cat /etc/os-release 2>/dev/null
   uname -a
   exit 1
@@ -293,7 +301,7 @@ echo "baseimage=${baseimage}"
 raspi_configfile="/boot/config.txt"
 raspi_commandfile="/boot/cmdline.txt"
 if [ -d /boot/firmware ];then
-  raspi_configfile="/boot/firmware/config.txt" 
+  raspi_configfile="/boot/firmware/config.txt"
   raspi_commandfile="/boot/firmware/cmdline.txt"
 fi
 echo "raspi_configfile=${raspi_configfile}"
@@ -334,8 +342,25 @@ if [ ${isDebianInHosts} -eq 0 ]; then
   fi
 fi
 
+# force locale - see #4861
+# next major release should make sure to be set during sd build card
+echo
+echo "*** Forcing locales ..."
+sudo sed -i '/^en_US.UTF-8/s/^#//' /etc/locale.gen
+sudo sed -i '/^en_GB.UTF-8/s/^/#/' /etc/locale.gen
+sudo locale-gen
+echo -e "LANG=en_US.UTF-8\nLANGUAGE=en_US.UTF-8\nLC_ALL=en_US.UTF-8" | sudo tee /etc/default/locale > /dev/null
+
+echo "*** Setting Fallback DNS ***"
+connName=$(nmcli -g GENERAL.CONNECTION device show eth0 2>/dev/null)
+echo "current nmcli eth0 connection (${connName})"
+if [ "${connName}" != "" ]; then
+  echo "Adding DNS fallback servers ..."
+  nmcli connection modify "${connName}" ipv4.dns "208.67.222.222,208.67.220.220,1.1.1.1" ipv4.dns-priority -1 ipv4.ignore-auto-dns no
+fi
+
 echo "*** Remove unnecessary packages ***"
-unnecessary_packages=(libreoffice* oracle-java* chromium-browser nuscratch scratch sonic-pi plymouth python2 vlc* cups)
+unnecessary_packages=(libreoffice* oracle-java* chromium-browser nuscratch scratch sonic-pi plymouth python2 vlc* cups* libcups* libcamera* firefox* ffmpeg libpostproc* eom* evince*)
 for pkg in "${unnecessary_packages[@]}"; do
   if dpkg-query -W -f='${Status}' $pkg 2>/dev/null | grep -q "ok installed"; then
     echo "Removing $pkg..."
@@ -347,11 +372,20 @@ done
 apt-get clean -y
 apt-get autoremove -y
 
-grep -q "^nameserver 8.8.8.8$" /etc/resolv.conf || echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+echo -e "\n*** UPDATE Debian***"  # add sources if not present
+echo -e "checking/adding sources ..."
+for SOURCE in "${REQUIRED_SOURCES[@]}"; do
+  if ! grep -Fxq "$SOURCE" /etc/apt/sources.list; then
+    echo "Adding  Source: $SOURCE"
+    echo "$SOURCE" | sudo tee -a /etc/apt/sources.list > /dev/null
+  fi
+done
 
-echo -e "\n*** UPDATE Debian***"
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get upgrade -f -y
+apt-get upgrade -f -y \
+  -o Dpkg::Options::="--force-confdef" \
+  -o Dpkg::Options::="--force-confold"
 
 echo -e "\n*** SOFTWARE UPDATE ***"
 # based on https://raspibolt.org/system-configuration.html#system-update
@@ -373,25 +407,41 @@ echo -e "\n*** SOFTWARE UPDATE ***"
 # sqlite3 -> database
 # fdisk -> create partitions
 # lsb-release -> needed to know which distro version we're running to add APT sources
-general_utils="sudo policykit-1 htop git curl bash-completion vim jq dphys-swapfile bsdmainutils autossh telnet vnstat parted dosfstools fbi sysbench build-essential dialog bc python3-dialog unzip whois fdisk lsb-release smartmontools rsyslog"
+general_utils="sudo htop git curl bash-completion vim jq dphys-swapfile bsdmainutils autossh telnet vnstat parted dosfstools fbi sysbench build-essential dialog bc python3-dialog unzip whois fdisk lsb-release smartmontools rsyslog qrencode dnsutils"
 # add btrfs-progs if not bookworm on aarch64
 [ "${architecture}" = "aarch64" ] && ! grep "12 (bookworm)" < /etc/os-release && general_utils="${general_utils} btrfs-progs"
 # python3-mako --> https://github.com/rootzoll/raspiblitz/issues/3441
 python_dependencies="python3-venv python3-dev python3-wheel python3-jinja2 python3-pip python3-mako"
 server_utils="rsync net-tools xxd netcat-openbsd openssh-client openssh-sftp-server sshpass psmisc ufw sqlite3"
-[ "${baseimage}" = "armbian" ] && armbian_dependencies="armbian-config" # add armbian-config
 [ "${architecture}" = "amd64" ] && amd64_dependencies="network-manager" # add amd64 dependency
 
 apt_install resolvconf
 /sbin/resolvconf -u
-apt_install ${general_utils} ${python_dependencies} ${server_utils} ${amd64_dependencies} ${armbian_dependencies}
+apt_install ${general_utils} ${python_dependencies} ${server_utils} ${amd64_dependencies}
 apt-get clean -y
 apt-get autoremove -y
 
 echo -e "\n*** Python DEFAULT libs & dependencies ***"
 
-if [ -f "/usr/bin/python3.11" ]; then
-  # use python 3.11 if available
+if [ -f "/usr/bin/python3.13" ]; then
+  # use python 3.13 if available (Debian 13 Trixie)
+  update-alternatives --install /usr/bin/python python /usr/bin/python3.13 1
+  # keep python backwards compatible
+  ln -s /usr/bin/python3.13 /usr/bin/python3.9
+  ln -s /usr/bin/python3.13 /usr/bin/python3.10
+  ln -s /usr/bin/python3.13 /usr/bin/python3.11
+  ln -s /usr/bin/python3.13 /usr/bin/python3.12
+  echo "python calls python3.13"
+elif [ -f "/usr/bin/python3.12" ]; then
+  # use python 3.12 if available
+  update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+  # keep python backwards compatible
+  ln -s /usr/bin/python3.12 /usr/bin/python3.9
+  ln -s /usr/bin/python3.12 /usr/bin/python3.10
+  ln -s /usr/bin/python3.12 /usr/bin/python3.11
+  echo "python calls python3.12"
+elif [ -f "/usr/bin/python3.11" ]; then
+  # use python 3.11 if available (Debian 12 Bookworm)
   update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
   # keep python backwards compatible
   ln -s /usr/bin/python3.11 /usr/bin/python3.9
@@ -484,6 +534,7 @@ if [ "${baseimage}" = "raspios_arm64" ]; then
     echo "dtparam=nvme" | tee -a $raspi_configfile
     echo 'dtoverlay=pi3-disable-bt' | tee -a $raspi_configfile
     echo 'dtoverlay=disable-bt' | tee -a $raspi_configfile
+    echo 'program_usb_timeout=1' | tee -a $raspi_configfile #4552
   else
     echo "# Raspiblitz Edits are already in $raspi_configfile"
   fi
@@ -547,8 +598,9 @@ echo -e "\n*** CONFIG ***"
 echo "root:raspiblitz" | chpasswd
 echo "pi:raspiblitz" | chpasswd
 
-# prepare auto-start of 00infoLCD.sh script on pi user login (just kicks in if auto-login of pi is activated in HDMI or LCD mode)
-if [ "${baseimage}" = "raspios_arm64" ] || [ "${baseimage}" = "debian" ] || [ "${baseimage}" = "ubuntu" ]; then
+# Auto-Login if RaspberryPi
+# (just kicks in if auto-login of pi is activated in HDMI or LCD mode)
+if [ "${baseimage}" = "raspios_arm64" ]; then
   homeFile=/home/pi/.bashrc
   autostartDone=$(grep -c "automatic start the LCD" $homeFile)
   if [ ${autostartDone} -eq 0 ]; then
@@ -563,8 +615,16 @@ if [ "${baseimage}" = "raspios_arm64" ] || [ "${baseimage}" = "debian" ] || [ "$
   else
     echo "autostart LCD already in $homeFile"
   fi
+
+# Auto-Login for all other plaforms
 else
-  echo "WARN: Script Autostart not available for baseimage(${baseimage}) - may just run on 'headless'"
+  # for setup auto-login with admin user
+  mkdir -p /etc/systemd/system/getty@tty1.service.d
+  cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin admin --noclear %I \$TERM
+EOF
 fi
 
 # limit journald system use
@@ -645,6 +705,7 @@ sudo -u bitcoin cp -r /etc/skel/. /home/bitcoin/
 echo "bitcoin:raspiblitz" | chpasswd
 # make home directory readable
 chmod 755 /home/bitcoin
+usermod -a -G bitcoin admin
 
 # WRITE BASIC raspiblitz.info to sdcard
 # if further info gets added .. make sure to keep that on: blitz.release.sh
@@ -655,17 +716,6 @@ echo "displayClass=headless" | tee -a raspiblitz.info
 mv raspiblitz.info /home/admin/
 chmod 755 /home/admin/raspiblitz.info
 chown admin:admin /home/admin/raspiblitz.info
-
-echo -e "\n*** ADDING GROUPS FOR CREDENTIALS STORE ***"
-# access to credentials (e.g. macaroon files) in a central location is managed with unix groups and permissions
-groupadd --force --gid 9700 lndadmin
-groupadd --force --gid 9701 lndinvoice
-groupadd --force --gid 9702 lndreadonly
-groupadd --force --gid 9703 lndinvoices
-groupadd --force --gid 9704 lndchainnotifier
-groupadd --force --gid 9705 lndsigner
-groupadd --force --gid 9706 lndwalletkit
-groupadd --force --gid 9707 lndrouter
 
 echo -e "\n*** SHELL SCRIPTS & ASSETS ***"
 # copy raspiblitz repo from github
@@ -683,6 +733,9 @@ sudo -u admin cp -r /home/admin/raspiblitz/home.admin/config.scripts /home/admin
 sudo -u admin chmod +x /home/admin/config.scripts/*.sh || exit 1
 sudo -u admin cp -r /home/admin/raspiblitz/home.admin/setup.scripts /home/admin/ || exit 1
 sudo -u admin chmod +x /home/admin/setup.scripts/*.sh || exit 1
+sudo -u admin git config --global --add safe.directory /home/admin/raspiblitz
+# Also configure safe.directory for root user in case root processes need to access the repo
+git config --global --add safe.directory /home/admin/raspiblitz
 
 # install newest version of BlitzPy
 blitzpy_wheel=$(ls -tR /home/admin/raspiblitz/home.admin/BlitzPy/dist | grep -E "any.whl" | tail -n 1)
@@ -784,7 +837,7 @@ if [ ! -f /var/log/auth.log ]; then
   touch /var/log/auth.log
 fi
 
-# *** CACHE DISK IN RAM & KEYVALUE-STORE***
+# *** CACHE DISK IN RAM & KEYVALUE-STORE ***
 echo "Activating CACHE RAM DISK ... "
 /home/admin/_cache.sh ramdisk on || exit 1
 /home/admin/_cache.sh keyvalue on || exit 1
@@ -859,7 +912,11 @@ echo "Provisioning BLITZ WEB SERVICE"
 # *** FATPACK *** (can be activated by parameter - see details at start of script)
 if ${fatpack}; then
   echo "* FATPACK activated"
-  /home/admin/config.scripts/blitz.fatpack.sh || exit 1
+  /home/admin/config.scripts/blitz.fatpack.sh
+  if [ $? -gt 0 ]; then
+    echo "FATPACK FAILED - please check the output above."
+    exit 1
+  fi
 else
   echo "* skipping FATPACK"
 fi

@@ -3,7 +3,7 @@
 # get raspiblitz config
 echo "get raspiblitz config"
 source /home/admin/raspiblitz.info
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf
 
 echo "services default values"
 if [ ${#runBehindTor} -eq 0 ]; then runBehindTor="off"; fi
@@ -13,6 +13,7 @@ if [ ${#BTCRPCexplorer} -eq 0 ]; then BTCRPCexplorer="off"; fi
 if [ ${#specter} -eq 0 ]; then specter="off"; fi
 if [ ${#BTCPayServer} -eq 0 ]; then BTCPayServer="off"; fi
 if [ ${#ElectRS} -eq 0 ]; then ElectRS="off"; fi
+if [ ${#fulcrum} -eq 0 ]; then fulcrum="off"; fi
 if [ ${#lndmanage} -eq 0 ]; then lndmanage="off"; fi
 if [ ${#joinmarket} -eq 0 ]; then joinmarket="off"; fi
 if [ ${#jam} -eq 0 ]; then jam="off"; fi
@@ -43,6 +44,7 @@ OPTIONS=()
 # just available for BTC
 if [ "${network}" == "bitcoin" ]; then
   OPTIONS+=(ea 'BTC Electrum Rust Server' ${ElectRS})
+  OPTIONS+=(fu 'BTC Fulcrum Electrum Server' ${fulcrum})
   OPTIONS+=(pa 'BTC PayServer' ${BTCPayServer})
   OPTIONS+=(ba 'BTC RPC-Explorer' ${BTCRPCexplorer})
   OPTIONS+=(sa 'BTC Specter Desktop' ${specter})
@@ -213,8 +215,8 @@ if [ "${ElectRS}" != "${choice}" ]; then
   extraparameter=""
   if [ "${choice}" =  "on" ]; then
     # check on HDD size
-    source <(sudo /home/admin/config.scripts/blitz.datadrive.sh status)
-    if [ ${hddGigaBytes} -lt 800 ]; then
+    source <(sudo /home/admin/config.scripts/blitz.data.sh status)
+    if [ ${storageSizeGB} -lt 800 ]; then
       whiptail --title " HDD/SSD TOO SMALL " --msgbox "\
 Since v1.5 we recommend at least a 1TB HDD/SSD if you want to run ElectRS.\n
 This is due to the eletcrum index that will grow over time and needs space.\n
@@ -254,6 +256,56 @@ else
   echo "ElectRS Setting unchanged."
 fi
 
+# Fulcrum process choice
+choice="off"; check=$(echo "${CHOICES}" | grep -c "fu")
+if [ ${check} -eq 1 ]; then choice="on"; fi
+if [ "${fulcrum}" != "${choice}" ]; then
+  echo "Fulcrum Setting changed .."
+  anychange=1
+  extraparameter=""
+  if [ "${choice}" =  "on" ]; then
+    # check on HDD size
+    source <(sudo /home/admin/config.scripts/blitz.data.sh status)
+    if [ ${storageSizeGB} -lt 800 ]; then
+      whiptail --title " HDD/SSD TOO SMALL " --msgbox "\
+We recommend at least a 1TB HDD/SSD if you want to run Fulcrum.\n
+This is due to the electrum index that will grow over time and needs space.\n
+To migrate to a bigger HDD/SSD check RaspiBlitz README on 'migration'.\n
+" 14 50
+    else
+      /home/admin/config.scripts/bonus.fulcrum.sh on ${extraparameter}
+      errorOnInstall=$?
+      if [ ${errorOnInstall} -eq 0 ]; then
+        sudo systemctl start fulcrum
+        whiptail --title " Installed Fulcrum Server " --msgbox "\
+The index database needs to be created before Fulcrum can be used.\n
+This can take hours/days depending on your RaspiBlitz.\n
+When finished use the new 'FULCRUM' entry in Main Menu for more info.\n
+" 14 50
+      needsReboot=0
+      else
+        l1="# FAIL on Fulcrum install #"
+        l2="Try manual install on terminal after reboot with:"
+        l3="/home/admin/config.scripts/bonus.fulcrum.sh on"
+        dialog --title 'FAIL' --msgbox "${l1}\n${l2}\n${l3}" 7 65
+      fi
+    fi
+  fi
+  if [ "${choice}" =  "off" ]; then
+	  whiptail --title "Delete Fulcrum Index?" \
+    --yes-button "Keep Index" \
+    --no-button "Delete Index" \
+    --yesno "Fulcrum is getting uninstalled. Do you also want to delete the Fulcrum Index? It contains no important data, but can take multiple hours to rebuild if needed again." 10 60
+	  if [ $? -eq 1 ]; then
+      extraparameter="deleteindex"
+	  fi
+    /home/admin/config.scripts/bonus.fulcrum.sh off ${extraparameter}
+  fi
+
+else
+  echo "Fulcrum Setting unchanged."
+fi
+
 # BTCPayServer process choice
 choice="off"; check=$(echo "${CHOICES}" | grep -c "pa")
 if [ ${check} -eq 1 ]; then choice="on"; fi
@@ -271,7 +323,7 @@ if [ "${BTCPayServer}" != "${choice}" ]; then
   fi
 
   # check if TOR is installed
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${choice}" =  "on" ] && [ "${runBehindTor}" = "off" ]; then
     whiptail --title " BTCPayServer needs TOR " --msgbox "\
 At the moment the BTCPayServer on the RaspiBlitz needs TOR.\n
@@ -308,7 +360,7 @@ if [ "${lndmanage}" != "${choice}" ]; then
   echo "lndmanage Setting changed .."
   anychange=1
   sudo -u admin /home/admin/config.scripts/bonus.lndmanage.sh ${choice}
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${lndmanage}" =  "on" ]; then
     sudo -u admin /home/admin/config.scripts/bonus.lndmanage.sh menu
   fi
@@ -323,7 +375,7 @@ if [ "${chantools}" != "${choice}" ]; then
   echo "chantools Setting changed .."
   anychange=1
   sudo -u admin /home/admin/config.scripts/bonus.chantools.sh ${choice}
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${chantools}" =  "on" ]; then
     sudo -u admin /home/admin/config.scripts/bonus.chantools.sh menu
   fi
@@ -338,7 +390,7 @@ if [ "${bos}" != "${choice}" ]; then
   echo "Balance of Satoshis Setting changed .."
   anychange=1
   sudo -u admin /home/admin/config.scripts/bonus.bos.sh ${choice}
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${bos}" =  "on" ]; then
     sudo -u admin /home/admin/config.scripts/bonus.bos.sh menu
   fi
@@ -353,7 +405,7 @@ if [ "${pyblock}" != "${choice}" ]; then
   echo "PyBLOCK Setting changed .."
   anychange=1
   sudo -u admin /home/admin/config.scripts/bonus.pyblock.sh ${choice}
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${pyblock}" =  "on" ]; then
     sudo -u admin /home/admin/config.scripts/bonus.pyblock.sh menu
   fi
@@ -503,7 +555,7 @@ if [ ${check} -eq 1 ]; then choice="on"; fi
 if [ "${joinmarket}" != "${choice}" ]; then
   echo "JoinMarket setting changed .."
   # check if TOR is installed
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${choice}" =  "on" ] && [ "${runBehindTor}" = "off" ]; then
     whiptail --title " Use Tor with JoinMarket" --msgbox "\
 It is highly recommended to use Tor with JoinMarket.\n
@@ -532,7 +584,7 @@ if [ ${check} -eq 1 ]; then choice="on"; fi
 if [ "${jam}" != "${choice}" ]; then
   echo "Jam setting changed .."
   # check if TOR is installed
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${choice}" =  "on" ] && [ "${runBehindTor}" = "off" ]; then
     whiptail --title " Use Tor with Jam" --msgbox "\
 It is highly recommended to use Tor with Jam.\n
@@ -589,7 +641,7 @@ if [ "${whitepaper}" != "${choice}" ]; then
   echo "Whitepaper setting changed .."
   anychange=1
   sudo -u admin /home/admin/config.scripts/bonus.whitepaper.sh ${choice}
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${whitepaper}" =  "on" ]; then
     sudo -u admin /home/admin/config.scripts/bonus.whitepaper.sh menu
   fi
@@ -604,7 +656,7 @@ if [ "${labelbase}" != "${choice}" ]; then
   echo "Labelbase setting changed .."
   anychange=1
   sudo -u admin /home/admin/config.scripts/bonus.labelbase.sh ${choice}
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${labelbase}" =  "on" ]; then
     sudo -u admin /home/admin/config.scripts/bonus.labelbase.sh menu
   fi
@@ -619,7 +671,7 @@ if [ "${publicpool}" != "${choice}" ]; then
   echo "Publicpool setting changed .."
   anychange=1
   sudo -u admin /home/admin/config.scripts/bonus.publicpool.sh ${choice}
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${publicpool}" =  "on" ]; then
     sudo -u admin /home/admin/config.scripts/bonus.publicpool.sh menu
   fi

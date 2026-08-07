@@ -90,9 +90,9 @@ function add_repo {
 function bitcoinI2Pstatus {
   echo "# I2P related logs from the bitcoin debug log"
   echo "# Follow live with the command:"
-  echo "sudo tail -n 1000 -f /mnt/hdd/bitcoin/debug.log | grep i2p"
+  echo "sudo tail -n 1000 -f /mnt/hdd/app-data/bitcoin/debug.log | grep i2p"
   echo
-  sudo cat /mnt/hdd/bitcoin/debug.log | grep i2p
+  sudo cat /mnt/hdd/app-data/bitcoin/debug.log | grep i2p
   echo
   echo "# Running the command:"
   echo "bitcoin-cli -netinfo 4"
@@ -108,7 +108,7 @@ function bitcoinI2Pstatus {
 }
 
 echo "# Running: 'blitz.i2pd.sh $*'"
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf
 
 # make sure to be present in PATH
 if ! echo "$PATH" | grep "/usr/sbin" >/dev/null; then
@@ -150,13 +150,14 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
   fi
 
   echo "# i2pd config"
-  /home/admin/config.scripts/blitz.conf.sh set debug tor /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  confAdd debug i2p /mnt/hdd/bitcoin/bitcoin.conf
-  /home/admin/config.scripts/blitz.conf.sh set i2psam 127.0.0.1:7656 /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  /home/admin/config.scripts/blitz.conf.sh set i2pacceptincoming 1 /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  /home/admin/config.scripts/blitz.conf.sh set onlynet onion /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  confAdd onlynet i2p /mnt/hdd/bitcoin/bitcoin.conf
-  PASSWORD_B=$(sudo cat /mnt/hdd/bitcoin/bitcoin.conf | grep rpcpassword | cut -c 13-)
+  sudo sed -i '/^debug=tor$/d' /mnt/hdd/app-data/bitcoin/bitcoin.conf
+  /home/admin/config.scripts/blitz.conf.sh set debug tor /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  confAdd debug i2p /mnt/hdd/app-data/bitcoin/bitcoin.conf
+  /home/admin/config.scripts/blitz.conf.sh set i2psam 127.0.0.1:7656 /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  /home/admin/config.scripts/blitz.conf.sh set i2pacceptincoming 1 /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  /home/admin/config.scripts/blitz.conf.sh set onlynet onion /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  confAdd onlynet i2p /mnt/hdd/app-data/bitcoin/bitcoin.conf
+  PASSWORD_B=$(sudo cat /mnt/hdd/app-data/bitcoin/bitcoin.conf | grep rpcpassword | cut -c 13-)
   cat <<EOF | sudo tee /etc/i2pd/i2pd.conf
 # i2pd settings for the RaspiBlitz
 # for the defaults see:
@@ -214,7 +215,7 @@ EOF
   echo "# Config: /etc/i2pd/i2pd.conf"
   echo "# i2pd web console: ${localip}:7070"
   echo "# Monitor i2p in bitcoind:"
-  echo "sudo tail -n 100 /mnt/hdd/bitcoin/debug.log | grep i2p"
+  echo "sudo tail -n 100 /mnt/hdd/app-data/bitcoin/debug.log | grep i2p"
   echo "bitcoin-cli -netinfo 4"
 
   exit 0
@@ -261,12 +262,13 @@ if [ "$1" = "0" ] || [ "$1" = "off" ]; then
   sudo apt remove -y i2pd
 
   echo "# Remove settings from bitcoind"
-  /home/admin/config.scripts/blitz.conf.sh delete debug /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  /home/admin/config.scripts/blitz.conf.sh set debug tor /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  /home/admin/config.scripts/blitz.conf.sh delete i2psam /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  /home/admin/config.scripts/blitz.conf.sh delete i2pacceptincoming /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  /home/admin/config.scripts/blitz.conf.sh delete onlynet /mnt/hdd/bitcoin/bitcoin.conf noquotes
-  /home/admin/config.scripts/blitz.conf.sh set onlynet onion /mnt/hdd/bitcoin/bitcoin.conf noquotes
+  sudo sed -i '/^debug=tor$/d' /mnt/hdd/app-data/bitcoin/bitcoin.conf
+  /home/admin/config.scripts/blitz.conf.sh delete debug /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  /home/admin/config.scripts/blitz.conf.sh set debug tor /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  /home/admin/config.scripts/blitz.conf.sh delete i2psam /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  /home/admin/config.scripts/blitz.conf.sh delete i2pacceptincoming /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  /home/admin/config.scripts/blitz.conf.sh delete onlynet /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
+  /home/admin/config.scripts/blitz.conf.sh set onlynet onion /mnt/hdd/app-data/bitcoin/bitcoin.conf noquotes
 
   sudo rm /etc/systemd/system/i2pd.service
 

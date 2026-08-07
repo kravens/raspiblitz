@@ -27,8 +27,8 @@ if [ $(sudo -u bitcoin cat ${CLCONF} | grep -c "^feeadjuster") -gt 0 ];then
   fi
 fi
 
-if grep -Eq "${netprefix}clEncryptedHSM=on" /mnt/hdd/raspiblitz.conf;then
-  if grep -Eq "${netprefix}clAutoUnlock=on" /mnt/hdd/raspiblitz.conf;then
+if grep -Eq "${netprefix}clEncryptedHSM=on" /mnt/hdd/app-data/raspiblitz.conf;then
+  if grep -Eq "${netprefix}clAutoUnlock=on" /mnt/hdd/app-data/raspiblitz.conf;then
     passwordFile=/home/bitcoin/.${netprefix}cl.pw
   else
     passwordFile=/dev/shm/.${netprefix}cl.pw
@@ -39,6 +39,9 @@ else
   passwordInput=""
   encryptedHSMoption=""
 fi
+
+sudo mkdir -p /run/lightningd
+sudo chown bitcoin:bitcoin /run/lightningd
 
 sudo systemctl stop ${netprefix}lightningd
 sudo systemctl disable ${netprefix}lightningd
@@ -55,19 +58,21 @@ After=network-online.target
 
 [Service]
 ExecStartPre=-/home/admin/config.scripts/cl.check.sh prestart $CHAIN
-ExecStart=/bin/sh -c '${passwordInput}/usr/local/bin/lightningd --conf=${CLCONF} ${encryptedHSMoption} --pid-file=/run/lightningd/${netprefix}lightningd.pid --rpc-file-mode 0660'
+ExecStart=/bin/sh -c '${passwordInput}/usr/local/bin/lightningd --conf=${CLCONF} ${encryptedHSMoption} --rpc-file-mode 0660'
 ExecStartPost=-/home/admin/config.scripts/cl.check.sh poststart $CHAIN
 
 # Creates /run/lightningd owned by bitcoin
 RuntimeDirectory=lightningd
 User=bitcoin
 Group=bitcoin
-# Type=forking hangs on restart
+# Use Type=simple - most reliable for CLN
 Type=simple
-PIDFile=/run/lightningd/${netprefix}lightningd.pid
+# Don't use PIDFile with Type=simple to avoid conflicts
 Restart=always
 RestartSec=60
 TimeoutSec=240
+# Increase startup timeout for CLN to fully initialize
+TimeoutStartSec=300
 StandardOutput=null
 StandardError=journal
 

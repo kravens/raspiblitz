@@ -4,7 +4,8 @@
 # ~/.config/btc-rpc-explorer.env
 # https://github.com/janoside/btc-rpc-explorer/blob/master/.env-sample
 
-VERSION="v3.4.0"
+# use commit hash, so that also in between updates can be used if needed
+GITHUBCOMMIT="8ed77ab225f5507c521b570d5240624de597ad44" #3.5.1
 
 # command info
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
@@ -17,9 +18,9 @@ fi
 
 PGPsigner="janoside"
 PGPpubkeyLink="https://github.com/janoside.gpg"
-PGPpubkeyFingerprint="70C0B166321C0AF8"
+PGPpubkeyFingerprint="F579929B39B119CC7B0BB71FB326ACF51F317B69"
 
-source /mnt/hdd/raspiblitz.conf 2>/dev/null
+source /mnt/hdd/app-data/raspiblitz.conf 2>/dev/null
 
 ##########################
 # MENU
@@ -43,7 +44,7 @@ This can take multiple hours.
   fi
 
   # check if password protected
-  isBitcoinWalletOff=$(sudo cat /mnt/hdd/${network}/${network}.conf | grep -c "^disablewallet=1")
+  isBitcoinWalletOff=$(sudo cat /mnt/hdd/app-data/${network}/${network}.conf | grep -c "^disablewallet=1")
   passwordInfo=""
   if [ "${isBitcoinWalletOff}" != "1" ]; then
     passwordInfo="Login is 'admin' with your Password B"
@@ -83,6 +84,9 @@ if [ "$1" = "status" ]; then
 
   echo "version='${VERSION}'"
 
+    fatpack=$(compgen -u | grep -c btcrpcexplorer)
+    echo "fatpack=${fatpack}"
+
   if [ "${BTCRPCexplorer}" = "on" ]; then
     echo "configured=1"
 
@@ -91,11 +95,11 @@ if [ "$1" = "status" ]; then
 
     # get network info
     localIP=$(hostname -I | awk '{print $1}')
-    toraddress=$(sudo cat /mnt/hdd/tor/btc-rpc-explorer/hostname 2>/dev/null)
+    toraddress=$(sudo cat /mnt/hdd/app-data/tor/btc-rpc-explorer/hostname 2>/dev/null)
     fingerprint=$(openssl x509 -in /mnt/hdd/app-data/nginx/tls.cert -fingerprint -noout | cut -d"=" -f2)
 
     authMethod="user_admin_password_b"
-    isBitcoinWalletOff=$(cat /mnt/hdd/bitcoin/bitcoin.conf | grep -c "^disablewallet=1")
+    isBitcoinWalletOff=$(cat /mnt/hdd/app-data/bitcoin/bitcoin.conf | grep -c "^disablewallet=1")
     if [ "${isBitcoinWalletOff}" == "1" ]; then
       authMethod="none"
     fi
@@ -144,38 +148,54 @@ if [ "$1" = "prestart" ]; then
   echo "## btc-rpc-explorer.service PRESTART CONFIG"
   echo "# --> /home/btcrpcexplorer/.config/btc-rpc-explorer.env"
 
+  # Robust initial values to avoid unset-variable issues
+  isElectrsReady=0
+  isFulcrumReady=0
+  electrumTCPport=""
+
   # check if electrs is installed & running
   if [ "${ElectRS}" == "on" ]; then
 
-    # CHECK THAT ELECTRS INDEX IS BUILD (WAITLOOP)
-    # electrs listening in port 50001 means index is build
+    # CHECK THAT ELECTRS INDEX IS BUILT (WAITLOOP)
+    # electrs listening in port 50001 means index is built
     # Use flags: t = tcp protocol only  /  a = list all connection states (includes LISTEN)  /  n = don't resolve names => no dns spam
-    isElectrumReady=$(netstat -tan | grep -c "50001")
-    if [ "${isElectrumReady}" == "0" ]; then
-      echo "# electrs is ON but not ready .. might still building index - kick systemd service into fail/wait/restart"
-      exit 1
-    fi
-    echo "# electrs is ON .. and ready (${isElectrumReady})"
+    isElectrsReady=$(netstat -tan | grep -c "50001")
+    echo "# electrs is ON .. and ready (${isElectrsReady})"
+    electrumTCPport=50001
+  fi
 
-    # CHECK THAT ELECTRS IS PART OF CONFIG
+  # check if fulcrum is installed & running
+  if [ "${fulcrum}" == "on" ]; then
+    isFulcrumReady=$(netstat -tan | grep -c "50021")
+    echo "# fulcrum is ON .. and ready (${isFulcrumReady})"
+    electrumTCPport=50021
+  fi
+
+  # Exit only if either service is on but not ready
+  if { [ "${ElectRS}" == "on" ] && [ "${isElectrsReady}" == "0" ]; } || { [ "${fulcrum}" == "on" ] && [ "${isFulcrumReady}" == "0" ]; }; then
+    echo "# An Electrum Server is ON but not ready .. might still building index - kick systemd service into fail/wait/restart"
+    exit 1
+  fi
+
+  if [ "${isElectrsReady}" -gt 0 ] || [ "${isFulcrumReady}" -gt 0 ]; then
+    # CHECK THAT ELECTRUM SERVER IS PART OF CONFIG
     echo "# updating BTCEXP_ADDRESS_API=electrumx"
     sed -i 's/^BTCEXP_ADDRESS_API=.*/BTCEXP_ADDRESS_API=electrumx/g' /home/btcrpcexplorer/.config/btc-rpc-explorer.env
-
+    # Use different delimiter to avoid collision with "tcp://"
+    sed -i "s|^BTCEXP_ELECTRUMX_SERVERS=.*|BTCEXP_ELECTRUMX_SERVERS=tcp://127.0.0.1:${electrumTCPport}|g" /home/btcrpcexplorer/.config/btc-rpc-explorer.env
   else
-
     # ELECTRS=OFF --> MAKE SURE IT IS NOT CONNECTED
     echo "# updating BTCEXP_ADDRESS_API=none"
     sed -i 's/^BTCEXP_ADDRESS_API=.*/BTCEXP_ADDRESS_API=none/g' /home/btcrpcexplorer/.config/btc-rpc-explorer.env
-
   fi
 
   #  UPDATE RPC PASSWORD
-  RPCPASSWORD=$(cat /mnt/hdd/${network}/${network}.conf | grep "^rpcpassword=" | cut -d "=" -f2)
+  RPCPASSWORD=$(cat /mnt/hdd/app-data/${network}/${network}.conf | grep "^rpcpassword=" | cut -d "=" -f2)
   echo "# updating BTCEXP_BITCOIND_PASS=${RPCPASSWORD}"
   sed -i "s/^BTCEXP_BITCOIND_PASS=.*/BTCEXP_BITCOIND_PASS=${RPCPASSWORD}/g" /home/btcrpcexplorer/.config/btc-rpc-explorer.env
 
   # WALLET PROTECTION (only if Bitcoin has wallet active protect BTC-RPC-Explorer with additional passwordB)
-  isBitcoinWalletOff=$(cat /mnt/hdd/${network}/${network}.conf | grep -c "^disablewallet=1")
+  isBitcoinWalletOff=$(cat /mnt/hdd/app-data/${network}/${network}.conf | grep -c "^disablewallet=1")
   if [ "${isBitcoinWalletOff}" == "1" ]; then
     echo "# updating BTCEXP_BASIC_AUTH_PASSWORD= --> no password needed because wallet is disabled"
     sed -i "s/^BTCEXP_BASIC_AUTH_PASSWORD=.*/BTCEXP_BASIC_AUTH_PASSWORD=/g" /home/btcrpcexplorer/.config/btc-rpc-explorer.env
@@ -213,7 +233,7 @@ if [ "$1" = "install" ]; then
   cd /home/btcrpcexplorer
   sudo -u btcrpcexplorer git clone https://github.com/janoside/btc-rpc-explorer.git
   cd btc-rpc-explorer
-  sudo -u btcrpcexplorer git reset --hard ${VERSION}
+  sudo -u btcrpcexplorer git reset --hard ${GITHUBCOMMIT}
   sudo -u btcrpcexplorer /home/admin/config.scripts/blitz.git-verify.sh "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}" || exit 1
   sudo -u btcrpcexplorer npm ci
   if ! [ $? -eq 0 ]; then
@@ -268,8 +288,8 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
     # prepare .env file
     echo "# getting RPC credentials from the ${network}.conf"
 
-    RPC_USER=$(sudo cat /mnt/hdd/${network}/${network}.conf | grep rpcuser | cut -c 9-)
-    PASSWORD_B=$(sudo cat /mnt/hdd/${network}/${network}.conf | grep rpcpassword | cut -c 13-)
+    RPC_USER=$(sudo cat /mnt/hdd/app-data/${network}/${network}.conf | grep rpcuser | cut -c 9-)
+    PASSWORD_B=$(sudo cat /mnt/hdd/app-data/${network}/${network}.conf | grep rpcpassword | cut -c 13-)
 
     touch /var/cache/raspiblitz/btc-rpc-explorer.env
     chmod 600 /var/cache/raspiblitz/btc-rpc-explorer.env || exit 1
@@ -376,13 +396,13 @@ EOF
   sudo /home/admin/config.scripts/blitz.conf.sh set BTCRPCexplorer "on"
 
   echo "# needs to finish creating txindex to be functional"
-  echo "# monitor with: sudo tail -n 20 -f /mnt/hdd/bitcoin/debug.log"
+  echo "# monitor with: sudo tail -n 20 -f /mnt/hdd/app-data/bitcoin/debug.log"
   echo "# npm audit fix"
   cd /home/btcrpcexplorer/btc-rpc-explorer/
   sudo npm audit fix
 
   # Hidden Service for BTC-RPC-explorer if Tor is active
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${runBehindTor}" = "on" ]; then
     # make sure to keep in sync with tor.network.sh script
     sudo /home/admin/config.scripts/tor.onion-service.sh btc-rpc-explorer 80 3022 443 3023

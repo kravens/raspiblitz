@@ -2,23 +2,60 @@
 
 # Based on: https://gist.github.com/normandmickey/3f10fc077d15345fb469034e3697d0d0
 
-# https://github.com/dgarage/NBXplorer/tags
-NBXplorerVersion="v2.5.2"
+# https://github.com/btcpayserver/NBXplorer/tags
+NBXplorerVersion="v2.6.7"
 # https://github.com/btcpayserver/btcpayserver/releases
-BTCPayVersion="v1.13.0"
+BTCPayVersion="v2.3.9"
 
 # check who signed the release (person that published release)
-#PGPsigner="nicolasdorier"
-#PGPpubkeyLink="https://keybase.io/nicolasdorier/pgp_keys.asc"
-#PGPpubkeyFingerprint="AB4CFA9895ACA0DBE27F6B346618763EF09186FE"
+PGPsigner="nicolasdorier"
+PGPpubkeyLink="https://keybase.io/nicolasdorier/pgp_keys.asc"
+PGPpubkeyFingerprint="AB4CFA9895ACA0DBE27F6B346618763EF09186FE"
 # ---
 #PGPsigner="Kukks"
 #PGPpubkeyLink="https://github.com/${PGPsigner}.gpg"
 #PGPpubkeyFingerprint="8E5530D9D1C93097"
 # ---
-PGPsigner="web-flow"
-PGPpubkeyLink="https://github.com/web-flow.gpg"
-PGPpubkeyFingerprint="B5690EEEBB952194"
+# PGPsigner="web-flow"
+# PGPpubkeyLink="https://github.com/web-flow.gpg"
+# PGPpubkeyFingerprint="B5690EEEBB952194"
+
+function DotNetInstall() {
+  echo "# install .NET"
+  # https://dotnet.microsoft.com/en-us/download/dotnet/10.0
+  sudo apt-get -y install libunwind8 gettext libssl-dev
+  cpu=$(uname -m)
+  if [ "${cpu}" = "aarch64" ]; then
+    binaryVersion="arm64"
+    dotNetdirectLink="https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.300/dotnet-sdk-10.0.300-linux-arm64.tar.gz"
+    dotNetChecksum="b503fe0cac8f8748d1ae67af40bc9157456cc0f93c8264e3bc52cc52a12fbbbc3a16e905d8528214f29337d7349859bb08de99b1e1406da92723b071b3f45ce5"
+  elif [ "${cpu}" = "x86_64" ]; then
+    binaryVersion="x64"
+    dotNetdirectLink="https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.300/dotnet-sdk-10.0.300-linux-x64.tar.gz"
+    dotNetChecksum="a0c404c1a2f85d70e32392ce297eb388c0310c519521b538a031a895469444c67f347d4f9ca1f8441f525967a89c9b75e2cd1676da486f95118cf4025c38d904"
+  else
+    echo "# FAIL! CPU (${cpu}) not supported."
+    echo "result='dotnet cpu not supported'"
+    exit 1
+  fi
+  dotNetName="dotnet-sdk-10.0.300-linux-${binaryVersion}.tar.gz"
+  sudo rm -f /home/btcpay/dotnet-sdk-*.tar.gz 2>/dev/null
+  sudo -u btcpay wget "${dotNetdirectLink}" -O "/home/btcpay/${dotNetName}"
+  # check binary is was not manipulated (checksum test)
+  actualChecksum=$(sha512sum /home/btcpay/${dotNetName} | cut -d " " -f1)
+  if [ "${actualChecksum}" != "${dotNetChecksum}" ]; then
+    echo "# FAIL # Downloaded ${dotNetName} not matching SHA512 checksum: ${dotNetChecksum}"
+    echo "result='dotnet wrong checksum'"
+    exit 1
+  fi
+  sudo rm -rf /home/btcpay/dotnet
+  sudo -u btcpay mkdir /home/btcpay/dotnet
+  sudo -u btcpay tar -xvf "/home/btcpay/${dotNetName}" -C /home/btcpay/dotnet
+  sudo rm -f /home/btcpay/*.tar.gz*
+  if ! grep -q "^DOTNET_CLI_TELEMETRY_OPTOUT=1$" /etc/environment; then
+    echo "DOTNET_CLI_TELEMETRY_OPTOUT=1" | sudo tee -a /etc/environment
+  fi
+}
 
 # command info
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
@@ -27,13 +64,13 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
   echo "bonus.btcpayserver.sh [install|uninstall]"
   echo "bonus.btcpayserver.sh [on|off|menu|write-tls-macaroon|cln-lightning-rpc-access]"
   echo "installs BTCPayServer $BTCPayVersion with NBXplorer $NBXplorerVersion"
-  echo "To update to the latest release published on github run:"
+  echo "To update to the configured release versions run:"
   echo "bonus.btcpayserver.sh update"
   echo
   exit 1
 fi
 
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf
 # get cpu architecture (checked with 'uname -m')
 source /home/admin/raspiblitz.info
 source <(/home/admin/_cache.sh get state)
@@ -54,11 +91,12 @@ function NBXplorerConfig() {
   # https://docs.btcpayserver.org/Deployment/ManualDeploymentExtended/#4-create-a-configuration-file
   echo
   echo "# Getting RPC credentials from the bitcoin.conf"
-  RPC_USER=$(sudo cat /mnt/hdd/bitcoin/bitcoin.conf | grep rpcuser | cut -c 9-)
-  PASSWORD_B=$(sudo cat /mnt/hdd/bitcoin/bitcoin.conf | grep rpcpassword | cut -c 13-)
+  RPC_USER=$(sudo cat /mnt/hdd/app-data/bitcoin/bitcoin.conf | grep rpcuser | cut -c 9-)
+  PASSWORD_B=$(sudo cat /mnt/hdd/app-data/bitcoin/bitcoin.conf | grep rpcpassword | cut -c 13-)
   sudo -u btcpay mkdir -p /home/btcpay/.nbxplorer/Main
   echo "\
 network=mainnet
+btcnodeendpoint=127.0.0.1:8336
 btc.rpc.user=${RPC_USER}
 btc.rpc.password=${PASSWORD_B}
 postgres=User ID=nbxplorer;Host=localhost;Port=5432;Application Name=nbxplorer;MaxPoolSize=20;Database=nbxplorermainnet;Password='raspiblitz';
@@ -151,6 +189,9 @@ if [ "$1" = "status" ]; then
 
   echo "version='${BTCPayVersion}'"
 
+  fatpack=$(compgen -u | grep -c btcpay)
+  echo "fatpack=${fatpack}"
+
   isInstalled=$(compgen -u | grep -c btcpay)
   echo "prepared=${isInstalled}"
   isActive=$(sudo ls /etc/systemd/system/btcpayserver.service 2>/dev/null | grep -c 'btcpayserver.service')
@@ -167,41 +208,14 @@ if [ "$1" = "status" ]; then
     echo "authMethod='userdefined'"
     echo "publicIP='${publicIP}'"
 
-    # check for LetsEncryptDomain for DynDns
-    error=""
-    source <(sudo /home/admin/config.scripts/blitz.subscriptions.ip2tor.py ip-by-tor $publicIP 2>/dev/null)
-    if [ ${#error} -eq 0 ]; then
-      echo "publicDomain='${domain}'"
-    fi
-
     sslFingerprintIP=$(openssl x509 -in /mnt/hdd/app-data/nginx/tls.cert -fingerprint -noout 2>/dev/null | cut -d"=" -f2)
     echo "sslFingerprintIP='${sslFingerprintIP}'"
 
-    toraddress=$(sudo cat /mnt/hdd/tor/btcpay/hostname 2>/dev/null)
+    toraddress=$(sudo cat /mnt/hdd/app-data/tor/btcpay/hostname 2>/dev/null)
     echo "toraddress='${toraddress}'"
 
     sslFingerprintTOR=$(openssl x509 -in /mnt/hdd/app-data/nginx/tor_tls.cert -fingerprint -noout 2>/dev/null | cut -d"=" -f2)
     echo "sslFingerprintTOR='${sslFingerprintTOR}'"
-
-    # check for IP2TOR
-    error=""
-    source <(sudo /home/admin/config.scripts/blitz.subscriptions.ip2tor.py ip-by-tor $toraddress)
-    if [ ${#error} -eq 0 ]; then
-      echo "ip2torType='${ip2tor-v1}'"
-      echo "ip2torID='${id}'"
-      echo "ip2torIP='${ip}'"
-      echo "ip2torPort='${port}'"
-      # check for LetsEncryptDomain on IP2TOR
-      error=""
-      source <(sudo /home/admin/config.scripts/blitz.subscriptions.letsencrypt.py domain-by-ip $ip)
-      if [ ${#error} -eq 0 ]; then
-        echo "ip2torDomain='${domain}'"
-        domainWarning=$(sudo /home/admin/config.scripts/blitz.subscriptions.letsencrypt.py subscription-detail ${domain} ${port} | jq -r ".warning")
-        if [ ${#domainWarning} -gt 0 ]; then
-          echo "ip2torWarn='${domainWarning}'"
-        fi
-      fi
-    fi
 
     # check for error
     isDead=$(sudo systemctl status btcpayserver | grep -c 'inactive (dead)')
@@ -451,46 +465,16 @@ if [ "$1" = "install" ]; then
   sudo adduser --system --group --home /home/btcpay btcpay
   cd /home/btcpay || exit 1
 
-  echo "# install .NET"
-  # https://dotnet.microsoft.com/en-us/download/dotnet/8.0
-  sudo apt-get -y install libunwind8 gettext libssl1.0
-  cpu=$(uname -m)
-  if [ "${cpu}" = "aarch64" ]; then
-    binaryVersion="arm64"
-    dotNetdirectLink="https://download.visualstudio.microsoft.com/download/pr/43e09d57-d0f5-4c92-a75a-b16cfd1983a4/cba02bd4f7c92fb59e22a25573d5a550/dotnet-sdk-8.0.100-linux-arm64.tar.gz"
-    dotNetChecksum="3296d2bc15cc433a0ca13c3da83b93a4e1ba00d4f9f626f5addc60e7e398a7acefa7d3df65273f3d0825df9786e029c89457aea1485507b98a4df2a1193cd765"
-  elif [ "${cpu}" = "x86_64" ]; then
-    binaryVersion="x64"
-    dotNetdirectLink="https://download.visualstudio.microsoft.com/download/pr/5226a5fa-8c0b-474f-b79a-8984ad7c5beb/3113ccbf789c9fd29972835f0f334b7a/dotnet-sdk-8.0.100-linux-x64.tar.gz"
-    dotNetChecksum="13905ea20191e70baeba50b0e9bbe5f752a7c34587878ee104744f9fb453bfe439994d38969722bdae7f60ee047d75dda8636f3ab62659450e9cd4024f38b2a5"
-  else
-    echo "# FAIL! CPU (${cpu}) not supported."
-    echo "result='dotnet cpu not supported'"
-    exit 1
-  fi
-  dotNetName="dotnet-sdk-8.0.100-linux-${binaryVersion}.tar.gz"
-  sudo rm /home/btcpay/${dotnetName} 2>/dev/null
-  sudo -u btcpay wget "${dotNetdirectLink}" -O "${dotNetName}"
-  # check binary is was not manipulated (checksum test)
-  actualChecksum=$(sha512sum /home/btcpay/${dotNetName} | cut -d " " -f1)
-  if [ "${actualChecksum}" != "${dotNetChecksum}" ]; then
-    echo "# FAIL # Downloaded ${dotNetName} not matching SHA512 checksum: ${dotNetChecksum}"
-    echo "result='dotnet wrong checksum'"
-    exit 1
-  fi
-  sudo -u btcpay mkdir /home/btcpay/dotnet
-  sudo -u btcpay tar -xvf ${dotNetName} -C /home/btcpay/dotnet
-  sudo rm -f *.tar.gz*
-  echo "DOTNET_CLI_TELEMETRY_OPTOUT=1" | sudo tee -a /etc/environment
+  DotNetInstall
 
   # NBXplorer
   echo "# Install NBXplorer $NBXplorerVersion"
   cd /home/btcpay || exit 1
   echo "# Download the NBXplorer source code $NBXplorerVersion"
-  sudo -u btcpay git clone https://github.com/dgarage/NBXplorer.git
+  sudo -u btcpay git clone https://github.com/btcpayserver/NBXplorer.git
   if [ ! -d "/home/btcpay/NBXplorer" ]; then
     echo "# FAIL! on first git clone - retrying with snapshot download."
-    sudo -u btcpay curl -L https://github.com/dgarage/NBXplorer/archive/refs/tags/$NBXplorerVersion.tar.gz -o NBXplorer.tar.gz
+    sudo -u btcpay curl -L https://github.com/btcpayserver/NBXplorer/archive/refs/tags/$NBXplorerVersion.tar.gz -o NBXplorer.tar.gz
     sudo -u btcpay tar -xzvf NBXplorer.tar.gz
     sudo -u btcpay mv NBXplorer-* NBXplorer
     if [ ! -d "/home/btcpay/NBXplorer" ]; then
@@ -520,10 +504,12 @@ if [ "$1" = "install" ]; then
   sudo -u btcpay git clone https://github.com/btcpayserver/btcpayserver.git 2>/dev/null
   cd btcpayserver || exit 1
   sudo -u btcpay git reset --hard $BTCPayVersion
-  #sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "web-flow" "https://github.com/web-flow.gpg" "(4AEE18F83AFDEB23|B5690EEEBB952194)" || exit 1
 
   echo "# verify signature of ${PGPsigner}"
-  sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}" || exit 1
+  if ! sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}"; then
+    # try with webflow
+    sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "web-flow" "https://github.com/web-flow.gpg" "B5690EEEBB952194" || exit 1
+  fi
 
   echo "# Build BTCPayServer $BTCPayVersion"
   # from the build.sh with path
@@ -612,7 +598,7 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
   fi
 
   # check for $BTCPayDomain
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${BTCPayDomain}" == "off" ]; then
     BTCPayDomain=""
   fi
@@ -692,9 +678,23 @@ WantedBy=multi-user.target
 
   NBXplorerConfig
 
-  # whitelist localhost in bitcoind
-  if ! sudo grep -Eq "^whitelist=127.0.0.1" /mnt/hdd/bitcoin/bitcoin.conf; then
-    echo "whitelist=127.0.0.1" | sudo tee -a /mnt/hdd/bitcoin/bitcoin.conf
+  # determine bitcoin.conf network prefix based on chain
+  if [ "${chain}" = "main" ]; then
+    btcprefix="main"
+  elif [ "${chain}" = "test" ]; then
+    btcprefix="test"
+  elif [ "${chain}" = "sig" ]; then
+    btcprefix="signet"
+  else
+    btcprefix="main"
+  fi
+
+  # whitelist connection in bitcoind
+  # migrate old non-prefixed whitebind to network-prefixed format
+  sudo sed -i "s/^whitebind=127.0.0.1:8336/${btcprefix}.whitebind=127.0.0.1:8336/g" /mnt/hdd/app-data/bitcoin/bitcoin.conf
+  # ensure network-prefixed whitebind exists
+  if ! sudo grep -Eq "^${btcprefix}.whitebind=127.0.0.1:8336" /mnt/hdd/app-data/bitcoin/bitcoin.conf; then
+    echo "${btcprefix}.whitebind=127.0.0.1:8336" | sudo tee -a /mnt/hdd/app-data/bitcoin/bitcoin.conf
     bitcoindRestart=yes
   fi
 
@@ -842,69 +842,44 @@ if [ "$1" = "restore" ]; then
 fi
 
 if [ "$1" = "update" ]; then
+  sudo systemctl stop btcpayserver 2>/dev/null
+  sudo systemctl stop nbxplorer 2>/dev/null
+
+  DotNetInstall
 
   # prevent the git error 'detected dubious ownership in repository'
   git config --global --add safe.directory /home/btcpay/NBXplorer
   git config --global --add safe.directory /home/btcpay/btcpayserver
 
-  echo "# Update NBXplorer"
+  echo "# Update NBXplorer to $NBXplorerVersion"
   cd /home/btcpay || exit 1
   cd NBXplorer || exit 1
-  # fetch latest master
-  if [ "$(sudo -u btcpay git fetch 2>&1 | grep -c "Please tell me who you are")" -gt 0 ]; then
+  if [ "$(sudo -u btcpay git fetch --tags 2>&1 | grep -c "Please tell me who you are")" -gt 0 ]; then
     sudo -u btcpay git config user.email "you@example.com"
     sudo -u btcpay git config user.name "Your Name"
+    sudo -u btcpay git fetch --tags
   fi
-  sudo -u btcpay git fetch
-  # unset $1
-  set --
-  UPSTREAM=${1:-'@{u}'}
-  LOCAL=$(git rev-parse @)
-  REMOTE=$(git rev-parse "$UPSTREAM")
+  echo "# Reset NBXplorer to release tag: $NBXplorerVersion"
+  sudo -u btcpay git reset --hard "$NBXplorerVersion"
+  sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh \
+    "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}" || exit 1
 
-  if [ $LOCAL = $REMOTE ]; then
-    TAG=$(git tag | sort -V | tail -1)
-    echo "# Up-to-date on version $TAG"
-  else
-    echo "# Pulling the latest changes..."
-    sudo -u btcpay git pull -p
-    TAG=$(git tag | sort -V | tail -1)
-    echo "# Reset to the latest release tag: $TAG"
-    sudo -u btcpay git reset --hard $TAG
+  echo "# Build NBXplorer $NBXplorerVersion"
+  sudo -u btcpay /home/btcpay/dotnet/dotnet build -c Release NBXplorer/NBXplorer.csproj || exit 1
 
-    PGPsigner="nicolasdorier"
-    PGPpubkeyLink="https://keybase.io/nicolasdorier/pgp_keys.asc"
-    PGPpubkeyFingerprint="AB4CFA9895ACA0DBE27F6B346618763EF09186FE"
-    if ! sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh \
-      "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}"; then
-      # try with webflow
-      PGPsigner="web-flow"
-      PGPpubkeyLink="https://github.com/web-flow.gpg"
-      PGPpubkeyFingerprint="B5690EEEBB952194"
-      sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh \
-        "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}" || exit 1
-    fi
-
-    echo "# Build NBXplorer $TAG"
-    # from the build.sh with path
-    sudo systemctl stop nbxplorer
-    sudo -u btcpay /home/btcpay/dotnet/dotnet build -c Release NBXplorer/NBXplorer.csproj || exit 1
-
-    # whitelist localhost in bitcoind
-    if ! sudo grep -Eq "^whitelist=127.0.0.1" /mnt/hdd/bitcoin/bitcoin.conf; then
-      echo "whitelist=127.0.0.1" | sudo tee -a /mnt/hdd/bitcoin/bitcoin.conf
-      echo "# Restarting bitcoind"
-      sudo systemctl restart bitcoind
-    fi
-
-    NBXplorerConfig
-
-    sudo systemctl start nbxplorer
-    echo "# Updated NBXplorer to $TAG"
+  # whitelist localhost in bitcoind
+  if ! sudo grep -Eq "^whitelist=127.0.0.1" /mnt/hdd/app-data/bitcoin/bitcoin.conf; then
+    echo "whitelist=127.0.0.1" | sudo tee -a /mnt/hdd/app-data/bitcoin/bitcoin.conf
+    echo "# Restarting bitcoind"
+    sudo systemctl restart bitcoind
   fi
+
+  NBXplorerConfig
+  sudo systemctl start nbxplorer
+  echo "# Updated NBXplorer to $NBXplorerVersion"
 
   # always stop to BtcPayConfig
-  sudo systemctl stop btcpayserver
+  sudo systemctl stop btcpayserver 2>/dev/null
 
   BtcPayConfig
 
@@ -914,38 +889,24 @@ if [ "$1" = "update" ]; then
   echo "# Update BTCPayServer"
   cd /home/btcpay || exit 1
   cd btcpayserver || exit 1
-  # fetch latest master
-  if [ "$(sudo -u btcpay git fetch 2>&1 | grep -c "Please tell me who you are")" -gt 0 ]; then
+  if [ "$(sudo -u btcpay git fetch --tags 2>&1 | grep -c "Please tell me who you are")" -gt 0 ]; then
     sudo -u btcpay git config user.email "you@example.com"
     sudo -u btcpay git config user.name "Your Name"
+    sudo -u btcpay git fetch --tags
   fi
-  sudo -u btcpay git fetch
-  # unset $1
-  set --
-  UPSTREAM=${1:-'@{u}'}
-  LOCAL=$(git rev-parse @)
-  REMOTE=$(git rev-parse "$UPSTREAM")
+  echo "# Reset BTCPayServer to release tag: $BTCPayVersion"
+  sudo -u btcpay git reset --hard "$BTCPayVersion"
 
-  if [ $LOCAL = $REMOTE ]; then
-    TAG=$(git tag | grep v1 | sort -V | tail -1)
-    echo "# Up-to-date on version $TAG"
-  else
-    echo "# Pulling latest changes..."
-    sudo -u btcpay git pull -p
-    TAG=$(git tag | grep v1 | sort -V | tail -1)
-    echo "# Reset to the latest release tag: $TAG"
-    sudo -u btcpay git reset --hard $TAG
-    # PGP verify - disabled for the update
-    # https://github.com/rootzoll/raspiblitz/issues/3025
-    # sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh \
-    #  "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}" || exit 1
-    echo "# Build BTCPayServer $TAG"
-    # from the build.sh with path
-    sudo systemctl stop btcpayserver
-    sudo -u btcpay /home/btcpay/dotnet/dotnet build -c Release /home/btcpay/btcpayserver/BTCPayServer/BTCPayServer.csproj || exit 1
-    sudo systemctl start btcpayserver
-    echo "# Updated BTCPayServer to $TAG"
+  echo "# verify signature of ${PGPsigner}"
+  if ! sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "${PGPsigner}" "${PGPpubkeyLink}" "${PGPpubkeyFingerprint}"; then
+    # try with webflow
+    sudo -u btcpay /home/admin/config.scripts/blitz.git-verify.sh "web-flow" "https://github.com/web-flow.gpg" "B5690EEEBB952194" || exit 1
   fi
+
+  echo "# Build BTCPayServer $BTCPayVersion"
+  sudo -u btcpay /home/btcpay/dotnet/dotnet build -c Release /home/btcpay/btcpayserver/BTCPayServer/BTCPayServer.csproj || exit 1
+  echo "# Updated BTCPayServer to $BTCPayVersion"
+
   # always start after BtcPayConfig
   sudo systemctl start btcpayserver
   exit 0

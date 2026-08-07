@@ -1,13 +1,54 @@
+## What's new in Version 1.12.2 of RaspiBlitz?
+
+- Update: BTCPayServer v2.3.9 [details](https://github.com/btcpayserver/btcpayserver/releases/tag/v2.3.9)
+
+## What's new in Version 1.12.1 of RaspiBlitz?
+
+App updates, fixes and optimizations.
+
+- Update: Bitcoin Core v29.2 [details](https://github.com/bitcoin/bitcoin/blob/master/doc/release-notes/release-notes-29.2.md)
+- Update: Core Lightning v25.12.1 [details](https://github.com/ElementsProject/lightning/releases/tag/v25.12.1)
+- Update: Electrum Server in Rust (electrs) v0.10.10 [details](https://github.com/romanz/electrs/blob/master/RELEASE-NOTES.md#01010-jul-19-2025)
+- Update: AlbyHub v1.20.0 [details](https://github.com/getAlby/hub/releases/tag/v1.20.0)
+- Update: Specter Desktop 2.1.1 [details](https://github.com/cryptoadvance/specter-desktop/releases/tag/v2.1.1)
+- Update: Fulcrum Electrum server v2.1.0 [details](https://github.com/cculianu/Fulcrum/releases/tag/v2.1.0)
+- Update: Bitcoin Knots 29.2 (optional) [details](https://github.com/bitcoinknots/bitcoin/releases/tag/v29.2.knots20251110)
+- Update: Suez commit:8f29314 [details](https://github.com/prusnak/suez/commits/master)
+- Update: Labelbase 2.3.0 [details](https://x.com/labelbase_space)
+- Update: JoininBox v0.8.5 [details](https://github.com/openoms/joininbox/releases/tag/v0.8.5)
+- Update: Jam v0.4.1 [details](https://github.com/joinmarket-webui/jam/releases/tag/v0.4.1)
+- Fix: Speedup data layout migration from 1.11.4 to 1.12.1 [details](https://github.com/raspiblitz/raspiblitz/issues/5194)
+
 ## What's new in Version 1.12.0 of RaspiBlitz?
 
-Work In Progress
+Introducing a new drive layout, now allowing to even boot and running the system from NVMe.
 
 Features:
 
-- Update: RaspberryOS arm64 base image 2024-11-19 (Debian 12 Bookworm) [details](https://downloads.raspberrypi.com/raspios_full_arm64/release_notes.txt)
+- New: Boot from NVMe on RaspberryPi5
+- New: Copy from old HDD/SSD/NVMe
+- New: Optional separation of Data & Storage/Blockchain drives with Auto-Expand for Proxmox
+- New: Bitcoin Knots 28.1 (as experimental option in SETTINGS ssh-menu)
+- Update: RaspberryOS arm64 base image 2025-05-13 (Debian 12 Bookworm) [details](https://downloads.raspberrypi.com/raspios_full_arm64/release_notes.txt)
 - Update: amd64 base image: debian-12.8.0-amd64-netinst.iso [details](https://www.debian.org/releases/stable/amd64/release-notes/ch-whats-new.en.html)
+- Update: Bitcoin Core v29.0 [details](https://github.com/bitcoin/bitcoin/blob/master/doc/release-notes/release-notes-29.0.md)
+- Update: Core Lightning v25.05 [details](https://github.com/ElementsProject/lightning/releases/tag/v25.05)
+- Update: LND v0.19.3-beta [details](https://github.com/lightningnetwork/lnd/releases/tag/v0.19.3-beta)
+- Update: LNbits 1.2.1 [details](https://github.com/lnbits/lnbits/releases/tag/v1.2.0)
+- Update: AlbyHub v1.17.2 [details](https://github.com/getAlby/hub/releases/tag/v1.17.2)
+- Update: Lightning Terminal v0.14.1-alpha [details](https://github.com/lightninglabs/lightning-terminal/releases/tag/v0.14.1-alpha)
+- Update: Mempool 3.2.1 [details](hhttps://github.com/mempool/mempool/releases/tag/v3.2.1)
+- Update: BTCPayServer v2.2.1 [details](https://github.com/btcpayserver/btcpayserver/releases/tag/v2.2.1)
 - Update: Specter Desktop 2.0.5 [details](https://github.com/cryptoadvance/specter-desktop/releases/tag/v2.0.5)
-- Update: Fulcrum Electrum server v1.11.1 (CLI install script with status menu) [details](https://github.com/cculianu/Fulcrum/releases/tag/v1.11.1)
+- Update: Elements 23.2.7 [details](https://github.com/ElementsProject/elements)
+- Update: Channel Tools (chantools) v0.13.7 [details](https://github.com/lightninglabs/chantools/releases/tag/v0.13.7)
+- Update: LNDg v1.10.0 [details](https://github.com/cryptosharks131/lndg/releases/tag/v1.10.0)
+- Update: Fulcrum Electrum server v1.12.0 (CLI install script with status menu) [details](https://github.com/cculianu/Fulcrum/releases/tag/v1.12.0)
+- Update: Helipad (Podcasting 2.0 Boostagram reader) v0.2.1 [details](https://github.com/Podcastindex-org/helipad/)
+- Update: Jam (JoinMarket Web UI) v0.4.0 [details](https://github.com/joinmarket-webui/jam/releases/tag/v0.4.0)
+- Update: JoininBox v0.8.4 [details](https://github.com/openoms/joininbox/releases/tag/v0.8.4)
+- Update: BTC-RPC-Explorer v3.5.1 [details](https://github.com/janoside/btc-rpc-explorer/blob/master/CHANGELOG.md#v351)
+- Remove: Migration from Umbrel, MyNode, Citadel (because of new drive layout with boot option)
 
 ## What's new in Version 1.11.4 of RaspiBlitz?
 
@@ -45,7 +86,7 @@ Containing Features:
 - Update: Mempool 3.0.0 [details](https://github.com/mempool/mempool/releases/tag/v3.0.0)
 - Update: Balance of Satoshis 19.3.4 (bos) [details](https://github.com/alexbosworth/balanceofsatoshis/blob/v19.3.4/CHANGELOG.md#1934)
 - Update: Labelbase 2.2.2 [details](https://x.com/labelbase_space)
-- Update: LNbits 0.12.11 [details](https://github.com/lnbits/lnbits/releases/tag/0.12.11)
+- Update: LNbits 0.12.11 [details](https://github.com/lnbits/lnbits/releases/tag/v0.12.11)
 - Update: RTL v0.15.2 [details](https://github.com/Ride-The-Lightning/RTL/releases/tag/v0.15.2)
 - Update: Jam (JoinMarket Web UI) v0.3.0 [details](https://github.com/joinmarket-webui/jam/releases/tag/v0.3.0)
 - Update: CLBOSS 0.13.3 [details](https://github.com/ZmnSCPxj/clboss/releases/tag/v0.13.3)

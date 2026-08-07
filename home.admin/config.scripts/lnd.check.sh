@@ -9,7 +9,7 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "-help" ];
 fi
 
 # load raspiblitz conf
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf
 source <(/home/admin/config.scripts/network.aliases.sh getvars lnd $2)
 
 # config file
@@ -48,12 +48,19 @@ if [ "$1" == "prestart" ]; then
     exit 1
   fi
 
+  ##### FILE PERMISSIONS #####
+  # make sure is readable by group
+  chmod g+rx /mnt/hdd/app-data/lnd/data
+  chmod g+rx /mnt/hdd/app-data/lnd/data/chain
+  chmod g+rx /mnt/hdd/app-data/lnd/data/chain/${network}
+  chmod g+rx /mnt/hdd/app-data/lnd/data/chain/${network}/${chain}net
+
   ##### CLEAN UP #####
 
   # all lines with just spaces to empty lines
-  sed -i 's/^[[:space:]]*$//g' /mnt/hdd/lnd/lnd.conf
+  sed -i 's/^[[:space:]]*$//g' /mnt/hdd/app-data/lnd/lnd.conf
   # all double empty lines to single empty lines
-  sed -i '/^$/N;/^\n$/D' /mnt/hdd/lnd/lnd.conf
+  sed -i '/^$/N;/^\n$/D' /mnt/hdd/app-data/lnd/lnd.conf
 
   # set default chain parameter
   targetchain=$2
@@ -75,7 +82,7 @@ if [ "$1" == "prestart" ]; then
   sed -i "/^sync-freelist=1/d" ${lndConfFile}
 
   # delete autounlock if passwordFile not present
-  passwordFile="/mnt/hdd/lnd/data/chain/${network}/${CHAIN}/password.info"
+  passwordFile="/mnt/hdd/app-data/lnd/data/chain/${network}/${CHAIN}/password.info"
   if ! ls ${passwordFile} &>/dev/null; then
     sed -i "/^wallet-unlock-password-file=/d" ${lndConfFile}
   fi
@@ -164,23 +171,23 @@ if [ "$1" == "prestart" ]; then
   setting ${lndConfFile} ${insertLine} "${network}d\.zmqpubrawblock" "tcp\:\/\/127\.0\.0\.1\:${zmqprefix}332"
 
   # SET/UPDATE rpcpass
-  RPCPSW=$(cat /mnt/hdd/${network}/${network}.conf | grep "^rpcpassword=" | tail -1 | cut -d "=" -f2 | tail -n 1)
+  RPCPSW=$(cat /mnt/hdd/app-data/${network}/${network}.conf | grep "^rpcpassword=" | tail -1 | cut -d "=" -f2 | tail -n 1)
   if [ "${RPCPSW}" == "" ]; then
-    RPCPSW=$(cat /mnt/hdd/${network}/${network}.conf | grep "^${network}d.rpcpassword=" | cut -d "=" -f2 | tail -n 1)
+    RPCPSW=$(cat /mnt/hdd/app-data/${network}/${network}.conf | grep "^${network}d.rpcpassword=" | cut -d "=" -f2 | tail -n 1)
   fi
   if [ "${RPCPSW}" == "" ]; then
-    echo 1>&2 "FAIL: 'rpcpassword' not found in /mnt/hdd/${network}/${network}.conf"
+    echo 1>&2 "FAIL: 'rpcpassword' not found in /mnt/hdd/app-data/${network}/${network}.conf"
     exit 11
   fi
   setting ${lndConfFile} ${insertLine} "${network}d\.rpcpass" "${RPCPSW}"
 
   # SET/UPDATE rpcuser
-  RPCUSER=$(cat /mnt/hdd/${network}/${network}.conf | grep "^rpcuser=" | cut -d "=" -f2 | tail -n 1)
+  RPCUSER=$(cat /mnt/hdd/app-data/${network}/${network}.conf | grep "^rpcuser=" | cut -d "=" -f2 | tail -n 1)
   if [ "${RPCUSER}" == "" ]; then
-    RPCUSER=$(cat /mnt/hdd/${network}/${network}.conf | grep "^${network}d.rpcuser=" | cut -d "=" -f2 | tail -n 1)
+    RPCUSER=$(cat /mnt/hdd/app-data/${network}/${network}.conf | grep "^${network}d.rpcuser=" | cut -d "=" -f2 | tail -n 1)
   fi
   if [ "${RPCUSER}" == "" ]; then
-    echo 1>&2 "FAIL: 'rpcuser' not found in /mnt/hdd/${network}/${network}.conf"
+    echo 1>&2 "FAIL: 'rpcuser' not found in /mnt/hdd/app-data/${network}/${network}.conf"
     exit 12
   fi
   setting ${lndConfFile} ${insertLine} "${network}d\.rpcuser" "${RPCUSER}"
@@ -192,7 +199,7 @@ if [ "$1" == "prestart" ]; then
 
   sectionLine=$(cat ${lndConfFile} | grep -n "^\[Application Options\]" | cut -d ":" -f1)
   echo "# sectionLine(${sectionLine})"
-  insertLine=$(expr $sectionLine + 1)
+  insertLine=$(expr $sectionLine + 2)
 
   # make sure API ports are set to standard
   setting ${lndConfFile} ${insertLine} "rpclisten" "0\.0\.0\.0\:1${L2rpcportmod}009"
@@ -211,6 +218,15 @@ if [ "$1" == "prestart" ]; then
   else
     # when running Tor a public ip can make startup problems - so remove
     sed -i '/^externalip=*/d' ${lndConfFile}
+  fi
+
+  # if no maxlogfiles set - set to 2
+  if [ $(cat ${lndConfFile} | grep -c "^maxlogfiles=") -eq 0 ]; then
+    setting ${lndConfFile} ${insertLine} "maxlogfiles" "2"
+  fi
+  # if no maxlogfilesize set - set to 100 MB
+  if [ $(cat ${lndConfFile} | grep -c "^maxlogfilesize=") -eq 0 ]; then
+    setting ${lndConfFile} ${insertLine} "maxlogfilesize" "400"
   fi
 
   ##### BOLT SECTION #####
@@ -382,19 +398,19 @@ if [ "$1" == "prestart" ]; then
 elif [ "$1" == "basic-setup" ]; then
 
   # check TLS exits
-  tlsExists=$(sudo ls /mnt/hdd/lnd/tls.cert 2>/dev/null | grep -c 'tls.cert')
+  tlsExists=$(sudo ls /mnt/hdd/app-data/lnd/tls.cert 2>/dev/null | grep -c 'tls.cert')
   if [ ${tlsExists} -gt 0 ]; then
     echo "tls=1"
   else
     echo "tls=0"
-    echo "err='tls.cert is missing in /mnt/hdd/lnd'"
+    echo "err='tls.cert is missing in /mnt/hdd/app-data/lnd'"
   fi
   # check TLS exits (on SD card for admin)
   tlsExists=$(sudo ls /home/admin/.lnd/tls.cert 2>/dev/null | grep -c 'tls.cert')
   if [ ${tlsExists} -gt 0 ]; then
     echo "tlsCopy=1"
     # check if the same
-    orgChecksum=$(sudo shasum -a 256 /mnt/hdd/lnd/tls.cert 2>/dev/null | cut -d " " -f1)
+    orgChecksum=$(sudo shasum -a 256 /mnt/hdd/app-data/lnd/tls.cert 2>/dev/null | cut -d " " -f1)
     cpyChecksum=$(sudo shasum -a 256 /home/admin/.lnd/tls.cert 2>/dev/null | cut -d " " -f1)
     if [ "${orgChecksum}" == "${cpyChecksum}" ]; then
       echo "tlsMismatch=0"
@@ -432,7 +448,7 @@ elif [ "$1" == "basic-setup" ]; then
   else
     echo "configCopy=0"
     echo "configMismatch=0"
-    echo "err='$(netprefix)lnd.conf is missing for user admin'"
+    echo "err='${netprefix}lnd.conf is missing for user admin'"
   fi
 
   # get network from config (BLOCKCHAIN)
@@ -445,19 +461,19 @@ elif [ "$1" == "basic-setup" ]; then
   fi
 
   # check for admin macaroon exist (on HDD)
-  adminMacaroonExists=$(sudo ls /mnt/hdd/lnd/data/chain/${network}/${chain}net/admin.macaroon 2>/dev/null | grep -c 'admin.macaroon')
+  adminMacaroonExists=$(sudo ls /mnt/hdd/app-data/lnd/data/chain/${network}/${chain}net/admin.macaroon 2>/dev/null | grep -c 'admin.macaroon')
   if [ ${adminMacaroonExists} -gt 0 ]; then
     echo "macaroon=1"
   else
     echo "macaroon=0"
-    echo "err='admin.macaroon is missing in /mnt/hdd/lnd/data/chain/${network}/${chain}net'"
+    echo "err='admin.macaroon is missing in /mnt/hdd/app-data/lnd/data/chain/${network}/${chain}net'"
   fi
   # check for admin macaroon exist (on SD card for admin)
   adminMacaroonExists=$(sudo ls /home/admin/.lnd/data/chain/${network}/${chain}net/admin.macaroon 2>/dev/null | grep -c 'admin.macaroon')
   if [ ${adminMacaroonExists} -gt 0 ]; then
     echo "macaroonCopy=1"
     # check if the same
-    orgChecksum=$(sudo shasum -a 256 /mnt/hdd/lnd/data/chain/${network}/${chain}net/admin.macaroon 2>/dev/null | cut -d " " -f1)
+    orgChecksum=$(sudo shasum -a 256 /mnt/hdd/app-data/lnd/data/chain/${network}/${chain}net/admin.macaroon 2>/dev/null | cut -d " " -f1)
     cpyChecksum=$(sudo shasum -a 256 /home/admin/.lnd/data/chain/${network}/${chain}net/admin.macaroon 2>/dev/null | cut -d " " -f1)
     if [ "${orgChecksum}" == "${cpyChecksum}" ]; then
       echo "macaroonMismatch=0"
@@ -472,7 +488,7 @@ elif [ "$1" == "basic-setup" ]; then
   fi
 
   # check for walletDB exist
-  walletExists=$(sudo ls /mnt/hdd/lnd/data/chain/${network}/${chain}net/wallet.db 2>/dev/null | grep -c 'wallet.db')
+  walletExists=$(sudo ls /mnt/hdd/app-data/lnd/data/chain/${network}/${chain}net/wallet.db 2>/dev/null | grep -c 'wallet.db')
   if [ ${walletExists} -gt 0 ]; then
     echo "wallet=1"
   else

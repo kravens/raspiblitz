@@ -5,7 +5,7 @@ RTLVERSION="v0.15.2"
 
 # check and load raspiblitz config
 # to know which network is running
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf 2>/dev/null
 
 # command info
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
@@ -69,11 +69,14 @@ if [ "$1" = "status" ] || [ "$1" = "menu" ]; then
   # get network info
   isInstalled=$(sudo ls /etc/systemd/system/${netprefix}${typeprefix}RTL.service 2>/dev/null | grep -c 'RTL.service')
   localip=$(hostname -I | awk '{print $1}')
-  toraddress=$(sudo cat /mnt/hdd/tor/${netprefix}${typeprefix}RTL/hostname 2>/dev/null)
-  fingerprint=$(openssl x509 -in /mnt/hdd/app-data/nginx/tls.cert -fingerprint -noout | cut -d"=" -f2)
+  toraddress=$(sudo cat /mnt/hdd/app-data/tor/${netprefix}${typeprefix}RTL/hostname 2>/dev/null)
+  fingerprint=$(openssl x509 -in /mnt/hdd/app-data/nginx/tls.cert -fingerprint -noout 2>/dev/null| cut -d"=" -f2)
   RTLHTTPS=$((RTLHTTP + 1))
 
   if [ "$1" = "status" ]; then
+
+    fatpack=$(compgen -u | grep -c rtl)
+    echo "fatpack=${fatpack}"
 
     echo "version='${RTLVERSION}'"
     echo "installed='${isInstalled}'"
@@ -228,6 +231,13 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
     echo "# missing parameter"
     exit 1
   fi
+
+  lightningImpl=$2
+  if [ "${lightningImpl}" != "lnd" ] && [ "${lightningImpl}" != "cl" ]; then
+    echo "# missing or wrong parameter <lnd|cl>"
+    exit 1
+  fi
+  LNTYPE=${lightningImpl}
 
   # check that is already active
   isActive=$(sudo ls /etc/systemd/system/${systemdService}.service 2>/dev/null | grep -c "${systemdService}.service")
@@ -438,7 +448,7 @@ if [ "$1" = "prestart" ]; then
   echo "## RTL PRESTART CONFIG (called by systemd prestart)"
 
   # getting the up-to-date RPC password
-  RPCPASSWORD=$(cat /mnt/hdd/${network}/${network}.conf | grep "^rpcpassword=" | cut -d "=" -f2)
+  RPCPASSWORD=$(cat /mnt/hdd/app-data/${network}/${network}.conf | grep "^rpcpassword=" | cut -d "=" -f2)
   echo "# Using RPCPASSWORD(${RPCPASSWORD})"
 
   # determine correct loop swap server port (lit over loop single)
@@ -571,7 +581,7 @@ if [ "$1" = "0" ] || [ "$1" = "off" ]; then
   if [ "$(echo "$@" | grep -c purge)" -gt 0 ]; then
     /home/admin/config.scripts/bonus.rtl.sh uninstall
     if [ $LNTYPE = cl ]; then
-      /home/admin/config.scripts/cl.rest.sh off ${CHAIN} purge
+      /home/admin/config.scripts/cl-plugin.clnrest.sh off ${CHAIN} purge
     fi
     echo "# Delete all configs"
     sudo rm -rf /mnt/hdd/app-data/rtl

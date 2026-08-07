@@ -13,7 +13,7 @@ fi
 
 ## get system configs
 source /home/admin/raspiblitz.info 2>/dev/null
-source /mnt/hdd/raspiblitz.conf 2>/dev/null
+source /mnt/hdd/app-data/raspiblitz.conf 2>/dev/null
 
 # GETTING STATUS
 if [ "$1" = "status" ]; then
@@ -78,13 +78,13 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
   dynUpdateUrl=''
 
   # when additional parameters are given
-  if [ $# > 1 ]; then
+  if [ $# -gt 1 ]; then
 
     # 2. parameter is dyndomain (required)
     dynDomain=$2
 
     # 3. parameter is the update url (optional - could be that router is doing the update)
-    if [ $# > 2 ]; then
+    if [ $# -gt 2 ]; then
       dynUpdateUrl=$3
     fi
   fi

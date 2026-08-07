@@ -4,7 +4,7 @@ echo "Starting the main menu ..."
 
 # MAIN MENU AFTER SETUP
 source /home/admin/raspiblitz.info
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf
 
 # FUNCTIONS
 
@@ -390,6 +390,9 @@ case $CHOICE in
                clear
                echo ""
                sudo /home/admin/config.scripts/blitz.shutdown.sh reboot
+               echo ""
+               echo "If your SSH session does not close automatically:"
+               echo "  Press Ctrl+C to disconnect."
                exit 1
 	          fi
             ;;
@@ -401,6 +404,9 @@ case $CHOICE in
                clear
                echo ""
                sudo /home/admin/config.scripts/blitz.shutdown.sh
+               echo ""
+               echo "If your SSH session does not close automatically:"
+               echo "  Press Ctrl+C to disconnect."
                exit 1
 	          fi
             ;;

@@ -9,7 +9,7 @@ fi
 
 # load basic system settings
 source /home/admin/raspiblitz.info 2>/dev/null
-source /mnt/hdd/raspiblitz.conf 2>/dev/null
+source /mnt/hdd/app-data/raspiblitz.conf 2>/dev/null
 
 # check that blockchain is set & supported
 if [ "${network}" != "bitcoin" ]; then
@@ -19,8 +19,7 @@ if [ "${network}" != "bitcoin" ]; then
 fi
 
 # check that HDD is available
-isMounted=$(sudo df | grep -c /mnt/hdd)
-if [ "${isMounted}" != "1" ]; then
+if [ ! -L /mnt/hdd/app-data ]; then
   echo "error='no datadrive is mounted'"
   exit 1
 fi
@@ -33,11 +32,11 @@ fi
 source <(/home/admin/_cache.sh get internet_localip)
 
 # check if copy is in progress
-copyBeginTime=$(cat /mnt/hdd/${network}/copy_begin.time 2>/dev/null | tr -cd '[[:digit:]]')
+copyBeginTime=$(cat /mnt/hdd/app-storage/${network}/copy_begin.time 2>/dev/null | tr -cd '[[:digit:]]')
 if [ ${#copyBeginTime} -eq 0 ]; then
   copyBeginTime=0
 fi
-copyEndTime=$(cat /mnt/hdd/${network}/copy_end.time 2>/dev/null | tr -cd '[[:digit:]]')
+copyEndTime=$(cat /mnt/hdd/app-storage/${network}/copy_end.time 2>/dev/null | tr -cd '[[:digit:]]')
 if [ ${#copyEndTime} -eq 0 ]; then
   copyEndTime=0
 fi
@@ -91,7 +90,7 @@ if [ "$1" = "target" ]; then
 
   # check if old blockchain data exists (1 Block is 1KB)
   deleteOldBlockchain=0
-  sizeBlocks=$(sudo du -s /mnt/hdd/bitcoin/blocks 2>/dev/null | tr -dc '[0-9]')
+  sizeBlocks=$(sudo du -s /mnt/hdd/app-storage/bitcoin/blocks 2>/dev/null | tr -dc '[0-9]')
   if [ "${sizeBlocks}" == "" ] || [ ${sizeBlocks} -lt 250000 ]; then 
     # blockchain block data is below 250MB ... assume just to be deleted and start copy fresh
     deleteOldBlockchain=1
@@ -112,16 +111,18 @@ if [ "$1" = "target" ]; then
 
   # delete ald blockchain data
   if [ "${deleteOldBlockchain}" == "1" ]; then
+    sudo rm -rfv /mnt/hdd/app-storage/bitcoin/blocks/* 2>/dev/null
+    sudo rm -rfv /mnt/hdd/app-storage/bitcoin/chainstate/* 2>/dev/null
     sudo rm -rfv /mnt/hdd/bitcoin/blocks/* 2>/dev/null
     sudo rm -rfv /mnt/hdd/bitcoin/chainstate/* 2>/dev/null
     sleep 3
   fi
 
-  # make sure /mnt/hdd/bitcoin exists
-  sudo mkdir /mnt/hdd/bitcoin 2>/dev/null
+  # make sure /mnt/hdd/app-storage/bitcoin exists
+  sudo mkdir -p /mnt/hdd/app-storage/bitcoin 2>/dev/null
 
   # allow all users write to it
-  sudo chmod 777 /mnt/hdd/bitcoin
+  sudo chmod 777 /mnt/hdd/app-storage/bitcoin
 
   echo 
   clear
@@ -141,7 +142,7 @@ if [ "$1" = "target" ]; then
     echo "Make sure that the Bitcoin Core Wallet is not running in the background anymore."
     echo ""
     echo "COPY, PASTE & EXECUTE the following command on your Windows computer terminal:"
-    echo "scp -r ./chainstate ./blocks bitcoin@${internet_localip}:/mnt/hdd/bitcoin"
+    echo "scp -r ./chainstate ./blocks bitcoin@${internet_localip}:/mnt/hdd/app-storage/bitcoin"
     echo ""
     echo "If asked for a password use PASSWORD A (or 'raspiblitz')."
   fi
@@ -161,7 +162,7 @@ if [ "$1" = "target" ]; then
     echo "Make sure that the Bitcoin Core Wallet is not running in the background anymore."
     echo ""
     echo "COPY, PASTE & EXECUTE the following command on your MacOSX terminal:"
-    echo "sudo rsync -avhW --progress ./chainstate ./blocks bitcoin@${internet_localip}:/mnt/hdd/bitcoin"
+    echo "sudo rsync -avhW --progress ./chainstate ./blocks bitcoin@${internet_localip}:/mnt/hdd/app-storage/bitcoin"
     echo ""
     echo "You will be asked for passwords. First can be the user password of your MacOSX"
     echo "computer and the last is the PASSWORD A (or 'raspiblitz') of this RaspiBlitz."
@@ -182,7 +183,7 @@ if [ "$1" = "target" ]; then
     echo "Make sure that the Bitcoin Core Wallet is not running in the background anymore."
     echo ""
     echo "COPY, PASTE & EXECUTE the following command on your Linux terminal:"
-    echo "sudo rsync -avhW --progress ./chainstate ./blocks bitcoin@${internet_localip}:/mnt/hdd/bitcoin"
+    echo "sudo rsync -avhW --progress ./chainstate ./blocks bitcoin@${internet_localip}:/mnt/hdd/app-storage/bitcoin"
     echo ""
     echo "You will be asked for passwords. First can be the user password of your Linux"
     echo "computer and the last is the PASSWORD A (or 'raspiblitz') of this RaspiBlitz."
@@ -211,22 +212,22 @@ if [ "$1" = "target" ]; then
   # make quick check if data is there
   anyDataAtAll=0
   quickCheckOK=1
-  count=$(sudo find /mnt/hdd/bitcoin/ -iname *.dat -type f | wc -l)
+  count=$(sudo find /mnt/hdd/app-storage/bitcoin/ -iname *.dat -type f | wc -l)
   if [ ${count} -gt 0 ]; then
-    echo "Found data in /mnt/hdd/bitcoin/blocks"
+    echo "Found data in /mnt/hdd/app-storage/bitcoin/blocks"
     anyDataAtAll=1
   fi
   if [ ${count} -lt 300 ]; then
     echo "FAIL: transfer seems invalid - less then 300 .dat files (${count})"
     quickCheckOK=0
   fi
-  count=$(sudo find /mnt/hdd/bitcoin/ -iname *.ldb -type f | wc -l)
+  count=$(sudo find /mnt/hdd/app-storage/bitcoin/chainstate -iname *.ldb -type f | wc -l)
   if [ ${count} -gt 0 ]; then
-    echo "Found data in /mnt/hdd/bitcoin/chainstate"
+    echo "Found data in /mnt/hdd/app-storage/bitcoin/chainstate"
     anyDataAtAll=1
   fi
-  if [ ${count} -lt 700 ]; then
-    echo "FAIL: transfer seems invalid - less then 700 .ldb files (${count})"
+  if [ ${count} -lt 300 ]; then
+    echo "FAIL: transfer seems invalid - less then 300 .ldb files (${count})"
     quickCheckOK=0
   fi
 
@@ -242,7 +243,7 @@ if [ "$1" = "target" ]; then
       echo "FAIL -> DATA seems incomplete."
     else
       echo "OK -> DATA LOOKS GOOD :D"
-      sudo rm /mnt/hdd/bitcoin/debug.log 2>/dev/null
+      sudo rm /mnt/hdd/app-storage/bitcoin/debug.log 2>/dev/null
     fi
 
   else
@@ -290,7 +291,8 @@ if [ "$1" = "target" ]; then
 
   if [ ${quickCheckOK} -eq 0 ]; then
     echo "Deleting invalid Data ... "
-    sudo rm -rf /mnt/hdd/bitcoin
+    sudo rm -rfv /mnt/hdd/app-storage/bitcoin/blocks/* 2>/dev/null
+    sudo rm -rfv /mnt/hdd/app-storage/bitcoin/chainstate/* 2>/dev/null
     sleep 2
   fi
 
@@ -357,11 +359,11 @@ if [ "$1" = "source" ]; then
   echo
   echo "# Starting copy over LAN (around 4-6 hours) ..."
   sed -i "s/^state=.*/state=copysource/g" /home/admin/raspiblitz.info
-  cd /mnt/hdd/${network}
+  cd /mnt/hdd/app-storage/${network}
 
   # transfere beginning flag
   date +%s > /home/admin/copy_begin.time
-  sudo sshpass -p "${targetPassword}" rsync -avhW -e 'ssh -o StrictHostKeyChecking=no -p 22' /home/admin/copy_begin.time bitcoin@${targetIP}:/mnt/hdd/bitcoin
+  sudo sshpass -p "${targetPassword}" rsync -avhW -e 'ssh -o StrictHostKeyChecking=no -p 22' /home/admin/copy_begin.time bitcoin@${targetIP}:/mnt/hdd/app-storage/bitcoin
   sudo rm -f /home/admin/copy_begin.time
 
   # repeat the syncing of directories until
@@ -372,7 +374,7 @@ if [ "$1" = "source" ]; then
 
       # transfere blockchain data
       sudo rm -f ./transferred.rsync
-      sudo sshpass -p "${targetPassword}" rsync -avhW -e 'ssh -o StrictHostKeyChecking=no -p 22' --info=progress2 --log-file=./transferred.rsync ./chainstate ./blocks bitcoin@${targetIP}:/mnt/hdd/bitcoin
+      sudo sshpass -p "${targetPassword}" rsync -avhW -e 'ssh -o StrictHostKeyChecking=no -p 22' --info=progress2 --log-file=./transferred.rsync ./chainstate ./blocks bitcoin@${targetIP}:/mnt/hdd/app-storage/bitcoin
 
       # check result
       # the idea is even after successfull transfer the loop will run a second time
@@ -403,7 +405,7 @@ if [ "$1" = "source" ]; then
   # transfere end flag
   sed -i "s/^state=.*/state=ready/g" /home/admin/raspiblitz.info
   date +%s > /home/admin/copy_end.time
-  sudo sshpass -p "${targetPassword}" rsync -avhW -e 'ssh -o StrictHostKeyChecking=no -p 22' /home/admin/copy_end.time bitcoin@${targetIP}:/mnt/hdd/bitcoin
+  sudo sshpass -p "${targetPassword}" rsync -avhW -e 'ssh -o StrictHostKeyChecking=no -p 22' /home/admin/copy_end.time bitcoin@${targetIP}:/mnt/hdd/app-storage/bitcoin
   sudo rm -f /home/admin/copy_end.time
 
   echo "# start services again ..."

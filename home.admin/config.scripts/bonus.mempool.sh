@@ -2,7 +2,7 @@
 
 # https://github.com/mempool/mempool
 
-pinnedVersion="v3.0.0"
+pinnedVersion="v3.2.1"
 
 # command info
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
@@ -17,7 +17,7 @@ PGPsigner="wiz"
 PGPpubkeyLink="https://github.com/wiz.gpg"
 PGPpubkeyFingerprint="A394E332255A6173"
 
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf 2>/dev/null
 
 # show info menu
 if [ "$1" = "menu" ]; then
@@ -68,15 +68,15 @@ if [ "$1" = "status" ]; then
 
   echo "version='${pinnedVersion}'"
 
-  isInstalled=$(compgen -u | grep -c mempool)
-  echo "codebase=${isInstalled}"
+  fatpack=$(compgen -u | grep -c mempool)
+  echo "fatpack=${fatpack}"
 
   if [ "${mempoolExplorer}" = "on" ]; then
     echo "configured=1"
 
     # get network info
     localIP=$(hostname -I | awk '{print $1}')
-    toraddress=$(sudo cat /mnt/hdd/tor/mempool/hostname 2>/dev/null)
+    toraddress=$(sudo cat /mnt/hdd/app-data/tor/mempool/hostname 2>/dev/null)
     fingerprint=$(openssl x509 -in /mnt/hdd/app-data/nginx/tls.cert -fingerprint -noout | cut -d"=" -f2)
 
     echo "installed=1"
@@ -148,6 +148,11 @@ if [ "$1" = "install" ]; then
   echo "# npm install for mempool explorer (frontend)"
 
   cd frontend || exit 1
+
+  # patch to fix #5122 - remove on next mempool update because they fixed it
+  sudo -u mempool sed -i '/^function download(filename, url) {/a\  if (!url) return;' sync-assets.js
+  # end patch
+
   if ! sudo -u mempool NG_CLI_ANALYTICS=false npm ci; then
     echo "FAIL - npm install did not run correctly, aborting"
     exit 1
@@ -239,8 +244,8 @@ if [ "$1" = "1" ] || [ "$1" = "on" ]; then
     # prepare .env file
     echo "# getting RPC credentials from the ${network}.conf"
 
-    RPC_USER=$(sudo cat /mnt/hdd/${network}/${network}.conf | grep rpcuser | cut -c 9-)
-    PASSWORD_B=$(sudo cat /mnt/hdd/${network}/${network}.conf | grep rpcpassword | cut -c 13-)
+    RPC_USER=$(sudo cat /mnt/hdd/app-data/${network}/${network}.conf | grep rpcuser | cut -c 9-)
+    PASSWORD_B=$(sudo cat /mnt/hdd/app-data/${network}/${network}.conf | grep rpcpassword | cut -c 13-)
 
     sudo rm /var/cache/raspiblitz/mempool-config.json 2>/dev/null
     touch /var/cache/raspiblitz/mempool-config.json
@@ -376,7 +381,7 @@ EOF
   /home/admin/config.scripts/blitz.conf.sh set mempoolExplorer "on"
 
   echo "# needs to finish creating txindex to be functional"
-  echo "# monitor with: sudo tail -n 20 -f /mnt/hdd/bitcoin/debug.log"
+  echo "# monitor with: sudo tail -n 20 -f /mnt/hdd/app-data/bitcoin/debug.log"
 
   # Hidden Service for Mempool if Tor is active
   if [ "${runBehindTor}" = "on" ]; then

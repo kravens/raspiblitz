@@ -3,7 +3,7 @@
 # https://github.com/lnbits/lnbits
 
 # https://github.com/lnbits/lnbits/releases
-tag="v0.12.11"
+tag="v1.2.1"
 VERSION="${tag}"
 
 # command info
@@ -27,7 +27,7 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
 fi
 
 echo "# Running: 'bonus.lnbits.sh $*'"
-source /mnt/hdd/raspiblitz.conf
+source /mnt/hdd/app-data/raspiblitz.conf
 
 lnbitsDataDir="/mnt/hdd/app-data/LNBits/data"
 lnbitsConfig="${lnbitsDataDir}/.env"
@@ -150,7 +150,7 @@ if [ "$1" = "menu" ]; then
     fundinginfo="on CLN "
   fi
 
-  text="https://${localIP}:${httpsPort}${authMethod}"
+  text="https://${localIP}:${httpsPort}"
 
   if [ ${#publicDomain} -gt 0 ]; then
     text="${text}
@@ -169,23 +169,7 @@ TOR Browser Hidden Service address (QR see LCD):
 ${toraddress}"
   fi
 
-  if [ ${#ip2torDomain} -gt 0 ]; then
-    text="${text}\n
-IP2TOR+LetsEncrypt: https://${ip2torDomain}:${ip2torPort}
-SHA1 ${sslFingerprintTOR}\n
-https://${ip2torDomain}:${ip2torPort} ready for public use"
-  elif [ ${#ip2torIP} -gt 0 ]; then
-    text="${text}\n
-IP2TOR: https://${ip2torIP}:${ip2torPort}
-SHA1 ${sslFingerprintTOR}\n
-Consider adding a LetsEncrypt HTTPS Domain under OPTIONS."
-  elif [ ${#publicDomain} -eq 0 ]; then
-    text="${text}\n
-To enable easy reachability with normal browser from the outside
-Consider adding a IP2TOR Bridge under OPTIONS."
-  fi
-
-  whiptail --title " LNbits ${fundinginfo}" --yes-button "OK" --no-button "OPTIONS" --yesno "${text}" 18 78
+  whiptail --title " LNbits ${fundinginfo}" --yes-button "OK" --no-button "OPTIONS" --yesno "${text}" 15 78
   result=$?
   sudo /home/admin/config.scripts/blitz.display.sh hide
   echo "option (${result}) - please wait ..."
@@ -257,18 +241,6 @@ Consider adding a IP2TOR Bridge under OPTIONS."
     2>&1 >/dev/tty)
 
   case $CHOICE in
-  IP2TOR-ON)
-    python /home/admin/config.scripts/blitz.subscriptions.ip2tor.py create-ssh-dialog LNBITS ${toraddress} 443
-    exit 0
-    ;;
-  IP2TOR-OFF)
-    clear
-    python /home/admin/config.scripts/blitz.subscriptions.ip2tor.py subscription-cancel ${ip2torID}
-    echo
-    echo "OK - PRESS ENTER to continue"
-    read key
-    exit 0
-    ;;
   HTTPS-ON)
     python /home/admin/config.scripts/blitz.subscriptions.letsencrypt.py create-ssh-dialog
     exit 0
@@ -428,6 +400,9 @@ if [ "$1" = "status" ]; then
 
   echo "version='${VERSION}'"
 
+    fatpack=$(compgen -u | grep -c lnbits)
+    echo "fatpack=${fatpack}"
+
   if [ "${LNBits}" = "on" ]; then
     echo "installed=1"
 
@@ -439,10 +414,8 @@ if [ "$1" = "status" ]; then
     echo "httpsSelfsigned='1'" # TODO: change later if IP2Tor+LetsEncrypt is active
     echo "publicIP='${publicIP}'"
 
-    # auth method is to call with a certain useer id
-    #admin_userid=$(sudo cat /home/lnbits/lnbits/.super_user)
-    admin_userid=$(sudo cat /mnt/hdd/app-data/LNBits/data/.super_user)
-    echo "authMethod='/wallet?usr=${admin_userid}'"
+    # auth method is web login
+    echo "authMethod='userdefined'"
 
     # check funding source
     if [ "${LNBitsFunding}" == "" ]; then
@@ -450,41 +423,14 @@ if [ "$1" = "status" ]; then
     fi
     echo "LNBitsFunding='${LNBitsFunding}'"
 
-    # check for LetsEnryptDomain for DynDns
-    error=""
-    source <(sudo /home/admin/config.scripts/blitz.subscriptions.ip2tor.py ip-by-tor $publicIP 2>/dev/null)
-    if [ ${#error} -eq 0 ]; then
-      echo "publicDomain='${domain}'"
-    fi
-
     sslFingerprintIP=$(openssl x509 -in /mnt/hdd/app-data/nginx/tls.cert -fingerprint -noout 2>/dev/null | cut -d"=" -f2)
     echo "sslFingerprintIP='${sslFingerprintIP}'"
 
-    toraddress=$(sudo cat /mnt/hdd/tor/lnbits/hostname 2>/dev/null)
+    toraddress=$(sudo cat /mnt/hdd/app-data/tor/lnbits/hostname 2>/dev/null)
     echo "toraddress='${toraddress}'"
 
     sslFingerprintTOR=$(openssl x509 -in /mnt/hdd/app-data/nginx/tor_tls.cert -fingerprint -noout 2>/dev/null | cut -d"=" -f2)
     echo "sslFingerprintTOR='${sslFingerprintTOR}'"
-
-    # check for IP2TOR
-    error=""
-    source <(sudo /home/admin/config.scripts/blitz.subscriptions.ip2tor.py ip-by-tor $toraddress)
-    if [ ${#error} -eq 0 ]; then
-      echo "ip2torType='${ip2tor-v1}'"
-      echo "ip2torID='${id}'"
-      echo "ip2torIP='${ip}'"
-      echo "ip2torPort='${port}'"
-      # check for LetsEnryptDomain on IP2TOR
-      error=""
-      source <(sudo /home/admin/config.scripts/blitz.subscriptions.letsencrypt.py domain-by-ip $ip)
-      if [ ${#error} -eq 0 ]; then
-        echo "ip2torDomain='${domain}'"
-        domainWarning=$(sudo /home/admin/config.scripts/blitz.subscriptions.letsencrypt.py subscription-detail ${domain} ${port} | jq -r ".warning")
-        if [ ${#domainWarning} -gt 0 ]; then
-          echo "ip2torWarn='${domainWarning}'"
-        fi
-      fi
-    fi
 
     # check for error
     isDead=$(sudo systemctl status lnbits | grep -c 'inactive (dead)')
@@ -558,7 +504,7 @@ if [ "$1" = "prestart" ]; then
     # check if lnbits user has read access on lnd data files
     checkReadAccess=$(cat /mnt/hdd/app-data/lnd/data/chain/${LNBitsNetwork}/${LNBitsChain}net/admin.macaroon | grep -c "lnd")
     if [ "${checkReadAccess}" != "1" ]; then
-      echo "# FAIL: missing lnd data in '/mnt/hdd/app-data/lnd' or missing access rights for lnbits user"
+      echo "# FAIL: missing lnd data in '/mnt/hdd/app-data/lnd/data/chain/${LNBitsNetwork}/${LNBitsChain}net/admin.macaroon' or missing access rights for lnbits user"
       exit 1
     fi
 
@@ -577,6 +523,19 @@ if [ "$1" = "prestart" ]; then
     # set the REST endpoint (use | as separator to avoid escaping slashes)
     sed -i "s|^LND_REST_ENDPOINT=.*|LND_REST_ENDPOINT=https://127.0.0.1:${portprefix}8080|g" $lnbitsConfig
 
+    echo "# Checking if LND REST API is responding ..."
+    count=0
+    while ! curl -s -k --head --request GET "https://127.0.0.1:${portprefix}8080/v1/getinfo" > /dev/null; do
+      count=$((count + 1))
+      if [ $count -gt 600 ]; then
+        echo "# FAIL: LND REST API did not respond after 10 minutes."
+        exit 1
+      fi
+      echo "# Waiting for LND REST API... (${count}s/600s)"
+      sleep 1
+    done
+    echo "# OK: LND REST API is responding."
+
   elif [ "${LNBitsLightning}" == "cl" ]; then
 
     isUsingCL=$(cat $lnbitsConfig | grep -c "LNBITS_BACKEND_WALLET_CLASS=CLightningWallet")
@@ -584,6 +543,12 @@ if [ "$1" = "prestart" ]; then
       echo "# FAIL: ${lnbitsConfig} not set to CLN"
       exit 1
     fi
+
+    CLIGHTNING_RPC=$(grep '^CLIGHTNING_RPC=' ${lnbitsConfig} | cut -d'=' -f2-)
+    while ! lightning-cli --rpc-file=${CLIGHTNING_RPC} getinfo &> /dev/null; do
+      echo "Waiting for CLN RPC socket to become available..."
+      sleep 1
+    done
 
     echo "# everything looks OK for lnbits config on CLN on ${LNBitsChain}net"
 
@@ -593,7 +558,6 @@ if [ "$1" = "prestart" ]; then
   fi
 
   # protect the admin user id if exists
-  # chmod 640 /home/lnbits/lnbits/.super_user 2>/dev/null
   chmod 640 /mnt/hdd/app-data/LNBits/data/.super_user 2>/dev/null
 
   echo "# OK: prestart finished"
@@ -699,6 +663,8 @@ if [ "$1" = "install" ]; then
   # add lnbits user
   echo "*** Add the 'lnbits' user ***"
   sudo adduser --system --group --home /home/lnbits lnbits
+  # add user to group bitcoin
+  sudo usermod -a -G bitcoin lnbits
 
   # install from GitHub
   echo "# get the github code user(${githubUser}) branch(${tag})"
@@ -955,7 +921,7 @@ EOF
   /home/admin/config.scripts/blitz.conf.sh set LNBits "on"
 
   # Hidden Service if Tor is active
-  source /mnt/hdd/raspiblitz.conf
+  source /mnt/hdd/app-data/raspiblitz.conf
   if [ "${runBehindTor}" = "on" ]; then
     # make sure to keep in sync with tor.network.sh script
     /home/admin/config.scripts/tor.onion-service.sh lnbits 80 5002 443 5003
