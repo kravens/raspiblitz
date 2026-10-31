@@ -343,12 +343,16 @@ def lndPayInvoice(lnInvoiceString):
             json={'payment_request': lnInvoiceString, 'fee_limit_sat': 1000, 'timeout_seconds': 60},
             verify=LND_TLS_PATH,
             stream=True,
+            # connect timeout, and max seconds between streamed updates (LND gives up after timeout_seconds)
+            timeout=(10, 90),
         )
         response.raise_for_status()
 
         # stream of payment updates, the last one has the final status
         payment = {}
         for line in response.iter_lines():
+            if not line:
+                continue
             update = json.loads(line)
             if 'error' in update:
                 raise BlitzError(update['error'].get('message', 'unknown error'), {'invoice': lnInvoiceString})
